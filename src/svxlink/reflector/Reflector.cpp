@@ -129,6 +129,17 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onTalkerUpdated));
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
+
+    // Initialize the VAD instance
+    vadInst = fvad_new();
+    if (!vadInst) {
+        cerr << "*** ERROR: Failed to create VAD instance\n";
+        exit(1); // Or handle the error as appropriate
+    }
+
+    // Configure the VAD instance (assuming FULLBAND audio at 48000 Hz)
+    fvad_set_sample_rate(vadInst, 48000);
+    fvad_set_mode(vadInst, 3); // Adjust the mode as needed for your application
 } /* Reflector::Reflector */
 
 
@@ -143,6 +154,12 @@ Reflector::~Reflector(void)
   m_client_con_map.clear();
   ReflectorClient::cleanup();
   delete TGHandler::instance();
+
+    // Free the VAD instance
+    if (vadInst) {
+        fvad_free(vadInst);
+        vadInst = nullptr;
+    }
 } /* Reflector::~Reflector */
 
 
@@ -427,46 +444,63 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
     case MsgUdpHeartbeat::TYPE:
       break;
 
-    case MsgUdpAudio::TYPE:
-    {
-      if (!client->isBlocked())
+      case MsgUdpAudio::TYPE:
       {
-        MsgUdpAudio msg;
-        if (!msg.unpack(ss))
-        {
-          cerr << "*** WARNING[" << client->callsign()
-               << "]: Could not unpack incoming MsgUdpAudioV1 message" << endl;
-          return;
-        }
-        uint32_t tg = TGHandler::instance()->TGForClient(client);
-        if (!msg.audioData().empty() && (tg > 0))
-        {
-          ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-          if (talker == 0)
+          if (!client->isBlocked())
           {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            talker = TGHandler::instance()->talkerForTG(tg);
-          }
-          if (talker == client)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            broadcastUdpMsg(msg,
-                ReflectorClient::mkAndFilter(
-                  ReflectorClient::ExceptFilter(client),
-                  ReflectorClient::TgFilter(tg)));
-            //broadcastUdpMsgExcept(tg, client, msg,
-            //    ProtoVerRange(ProtoVer(0, 6),
-            //                  ProtoVer(1, ProtoVer::max().minor())));
-            //MsgUdpAudio msg_v2(msg);
-            //broadcastUdpMsgExcept(tg, client, msg_v2,
-            //    ProtoVerRange(ProtoVer(2, 0), ProtoVer::max()));
-          }
-        }
-      }
-      break;
-    }
+              MsgUdpAudio msg;
+              if (!msg.unpack(ss))
+              {
+                  std::cerr << "*** WARNING[" << client->callsign() << "]: Could not unpack incoming MsgUdpAudioV1 message" << std::endl;
+                  return;
+              }
+              uint32_t tg = TGHandler::instance()->TGForClient(client);
+              if (!msg.audioData().empty() && (tg > 0))
+              {
+                  static std::vector<uint8_t> accumulatedAudioData;
+                  accumulatedAudioData.insert(accumulatedAudioData.end(), msg.audioData().begin(), msg.audioData().end());
 
-    //case MsgUdpAudio::TYPE:
+                  while (accumulatedAudioData.size() >= 960) // Enough data for VAD processing
+                  {
+                      std::vector<int16_t> audioFrame(480); // 10 ms of audio at 48000 Hz
+                      for (size_t i = 0; i < audioFrame.size(); ++i)
+                      {
+                          size_t byteIndex = i * 2;
+                          audioFrame[i] = static_cast<int16_t>((accumulatedAudioData[byteIndex + 1] << 8) | accumulatedAudioData[byteIndex]);
+                      }
+
+                      int vadResult = fvad_process(vadInst, audioFrame.data(), audioFrame.size());
+                      if (vadResult == 1) // Voice detected
+                      {
+                          std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
+                          // Proceed to check for talker and broadcast if this client is the current talker
+                          ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
+                          if (talker == nullptr || talker == client)
+                          {
+                              TGHandler::instance()->setTalkerForTG(tg, client);
+                              broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
+                          }
+                          accumulatedAudioData.erase(accumulatedAudioData.begin(), accumulatedAudioData.begin() + 960);
+                          break; // Break after processing a voice-active frame
+                      }
+                      else if (vadResult == 0) // No voice detected
+                      {
+                          std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
+                          accumulatedAudioData.erase(accumulatedAudioData.begin(), accumulatedAudioData.begin() + 960);
+                          continue; // Continue checking the next chunk if any
+                      }
+                      else // Error in VAD processing
+                      {
+                          std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
+                          accumulatedAudioData.clear();
+                      }
+                  }
+              }
+          }
+          break;
+      }
+
+          //case MsgUdpAudio::TYPE:
     //{
     //  if (!client->isBlocked())
     //  {

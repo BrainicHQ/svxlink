@@ -77,7 +77,9 @@ namespace Async
 class ReflectorMsg;
 class ReflectorUdpMsg;
 
-
+extern "C" {
+#include <fvad.h>
+}
 /****************************************************************************
  *
  * Forward declarations of classes inside of the declared namespace
@@ -182,6 +184,7 @@ class Reflector : public sigc::trackable
     void requestQsy(ReflectorClient *client, uint32_t tg);
 
   private:
+    Fvad* vadInst;
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
     typedef Async::TcpServer<Async::FramedTcpConnection> FramedTcpServer;
