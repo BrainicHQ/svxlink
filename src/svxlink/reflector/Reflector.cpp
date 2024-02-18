@@ -142,7 +142,7 @@ Reflector::Reflector(void)
 
     // Configure the VAD instance (assuming FULLBAND audio at 48000 Hz)
     fvad_set_sample_rate(vadInst, 48000);
-    fvad_set_mode(vadInst, 2); // Adjust the mode as needed for your application
+    fvad_set_mode(vadInst, 3); // Adjust the mode as needed for your application
 } /* Reflector::Reflector */
 
 
@@ -504,13 +504,15 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   accumulatedAudioData.append(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
-                  size_t frameSize = 480; // 10 ms of audio at 48000 Hz
+                  size_t frameSize = 960; // 20ms of audio at 48000 Hz
 
                   while (accumulatedAudioData.extractAudioFrame(audioFrame, frameSize)) {
                       int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
                       if (vadResult == 1) // Voice detected
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
+                          // output the VAD processing details like frameSize, vadResult, etc.
+                          std::cout << "Frame size: " << frameSize << std::endl;
                           ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
                           if (talker == nullptr || talker == client)
                           {
