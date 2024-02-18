@@ -507,7 +507,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   size_t frameSize = 480; // 10 ms of audio at 48000 Hz
 
                   while (accumulatedAudioData.extractAudioFrame(audioFrame, frameSize)) {
-                  {
                       int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
                       if (vadResult == 1) // Voice detected
                       {
