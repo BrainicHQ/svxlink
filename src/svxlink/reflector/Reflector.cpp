@@ -503,10 +503,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   static ThreadSafeAudioBuffer accumulatedAudioData;
                   accumulatedAudioData.append(msg.audioData());
 
-                  std::vector<int16_t> audioFrame(480); // 10 ms of audio at 48000 Hz
-                  while (accumulatedAudioData.extractAudioFrame(audioFrame))
+                  std::vector<int16_t> audioFrame;
+                  size_t frameSize = 480; // 10 ms of audio at 48000 Hz
+
+                  while (accumulatedAudioData.extractAudioFrame(audioFrame, frameSize)) {
                   {
-                      int vadResult = fvad_process(vadInst, audioFrame.data(), audioFrame.size());
+                      int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
                       if (vadResult == 1) // Voice detected
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
