@@ -112,6 +112,8 @@ class ReflectorClient
 {
   public:
     using ClientId = ReflectorUdpMsg::ClientId;
+    void appendAudioData(const std::vector<uint8_t>& data);
+    bool extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize);
 
     typedef enum
     {
@@ -427,6 +429,8 @@ class ReflectorClient
     const Json::Value& nodeInfo(void) const { return m_node_info; }
 
   private:
+    std::vector<uint8_t> audioBuffer; // Replaces ThreadSafeAudioBuffer
+    std::mutex audioBufferMutex; // Ensures thread safety for audioBuffer operations
     using ClientIdRandomDist  = std::uniform_int_distribution<ClientId>;
     using ClientMap           = std::map<ClientId, ReflectorClient*>;
 

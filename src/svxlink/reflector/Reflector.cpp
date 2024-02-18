@@ -380,47 +380,6 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
-// Thread-safe buffer for accumulated audio data
-class ThreadSafeAudioBuffer {
-private:
-    std::vector<uint8_t> buffer;
-    std::mutex mutex;
-
-public:
-    void append(const std::vector<uint8_t>& data) {
-        std::lock_guard<std::mutex> lock(mutex);
-        buffer.insert(buffer.end(), data.begin(), data.end());
-    }
-
-    bool extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize) {
-        std::lock_guard<std::mutex> lock(mutex);
-        // Ensure there are enough bytes for the specified frame size
-        if (buffer.size() < frameSize * 2) { // 2 bytes per sample
-            return false;
-        }
-
-        audioFrame.clear();
-        audioFrame.reserve(frameSize);
-
-        for (size_t i = 0; i < frameSize * 2; i += 2) {
-            int16_t sample = static_cast<int16_t>((buffer[i + 1] << 8) | buffer[i]);
-            audioFrame.push_back(sample);
-        }
-
-        buffer.erase(buffer.begin(), buffer.begin() + frameSize * 2);
-        return true;
-    }
-
-    void clear() {
-        std::lock_guard<std::mutex> lock(mutex);
-        buffer.clear();
-    }
-
-    size_t size() const {
-        return buffer.size();
-    }
-};
-
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
 {
@@ -500,13 +459,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               uint32_t tg = TGHandler::instance()->TGForClient(client);
               if (!msg.audioData().empty() && (tg > 0))
               {
-                  static ThreadSafeAudioBuffer accumulatedAudioData;
-                  accumulatedAudioData.append(msg.audioData());
+                  client->appendAudioData(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
                   size_t frameSize = 320; // 20ms of audio at 16kHz
 
-                  while (accumulatedAudioData.extractAudioFrame(audioFrame, frameSize)) {
+                  while (client->extractAudioFrame(audioFrame, frameSize)) {
                       int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
                       if (vadResult == 1) // Voice detected
                       {
@@ -522,12 +480,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       else if (vadResult == 0) // No voice detected
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
-                          accumulatedAudioData.clear();
                           continue; // Continue checking the next chunk if any
                       }
                       else // Error in VAD processing
                       {
-                          accumulatedAudioData.clear();
                           std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
                       }
                   }

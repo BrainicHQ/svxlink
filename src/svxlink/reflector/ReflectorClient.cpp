@@ -36,6 +36,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <algorithm>
 #include <cerrno>
 #include <iterator>
+#include <vector>
+#include <mutex>
 
 
 /****************************************************************************
@@ -271,6 +273,33 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_blocktime = blocktime;
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
+
+void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
+    std::lock_guard<std::mutex> lock(audioBufferMutex);
+    audioBuffer.insert(audioBuffer.end(), data.begin(), data.end());
+}
+
+bool ReflectorClient::extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize) {
+    std::lock_guard<std::mutex> lock(audioBufferMutex);
+    // Ensure there's enough data for one frame. Remember, 2 bytes per sample.
+    if (audioBuffer.size() < frameSize * 2) {
+        return false; // Not enough data
+    }
+
+    audioFrame.clear();
+    audioFrame.reserve(frameSize);
+
+    for (size_t i = 0; i < frameSize * 2; i += 2) {
+        // Assuming little-endian byte order. Adjust if your data is big-endian.
+        int16_t sample = static_cast<int16_t>(audioBuffer[i] | (audioBuffer[i + 1] << 8));
+        audioFrame.push_back(sample);
+    }
+
+    // Remove the extracted data from the buffer.
+    audioBuffer.erase(audioBuffer.begin(), audioBuffer.begin() + frameSize * 2);
+
+    return true;
+}
 
 
 /****************************************************************************
