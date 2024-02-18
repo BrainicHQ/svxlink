@@ -501,6 +501,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               if (!msg.audioData().empty() && (tg > 0))
               {
                   static ThreadSafeAudioBuffer accumulatedAudioData;
+                  accumulatedAudioData.clear();
                   accumulatedAudioData.append(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
@@ -511,8 +512,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       if (vadResult == 1) // Voice detected
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
-                          // output the VAD processing details like frameSize, vadResult, etc.
-                          std::cout << "Frame size: " << frameSize << std::endl;
                           ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
                           if (talker == nullptr || talker == client)
                           {
