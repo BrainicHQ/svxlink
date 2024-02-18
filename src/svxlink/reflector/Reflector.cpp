@@ -522,15 +522,15 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       else if (vadResult == 0) // No voice detected
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
+                          accumulatedAudioData.clear();
                           continue; // Continue checking the next chunk if any
                       }
                       else // Error in VAD processing
                       {
+                          accumulatedAudioData.clear();
                           std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
                       }
                   }
-
-                  accumulatedAudioData.clear();
               }
           }
           break;
