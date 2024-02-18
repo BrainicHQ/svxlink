@@ -501,7 +501,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               if (!msg.audioData().empty() && (tg > 0))
               {
                   static ThreadSafeAudioBuffer accumulatedAudioData;
-                  accumulatedAudioData.clear();
                   accumulatedAudioData.append(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
@@ -528,9 +527,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       else // Error in VAD processing
                       {
                           std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
-                          accumulatedAudioData.clear();
                       }
                   }
+
+                  accumulatedAudioData.clear();
               }
           }
           break;
