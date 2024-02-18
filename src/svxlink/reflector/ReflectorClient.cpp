@@ -38,6 +38,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <iterator>
 #include <vector>
 #include <mutex>
+#include <endian.h>
 
 
 /****************************************************************************
@@ -290,8 +291,8 @@ bool ReflectorClient::extractAudioFrame(std::vector<int16_t>& audioFrame, size_t
     audioFrame.reserve(frameSize);
 
     for (size_t i = 0; i < frameSize * 2; i += 2) {
-        // Assuming little-endian byte order. Adjust if your data is big-endian.
-        int16_t sample = static_cast<int16_t>(audioBuffer[i] | (audioBuffer[i + 1] << 8));
+        uint16_t be_sample = static_cast<uint16_t>((audioBuffer[i] << 8) | audioBuffer[i + 1]);
+        int16_t sample = static_cast<int16_t>(be16toh(be_sample)); // Convert from big-endian to host endianess
         audioFrame.push_back(sample);
     }
 
