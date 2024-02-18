@@ -504,7 +504,8 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   accumulatedAudioData.append(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
-                  size_t frameSize = 960; // 20ms of audio at 48000 Hz
+                  // 20ms of audio at 16000 Hz
+                  size_t frameSize = 320;
 
                   while (accumulatedAudioData.extractAudioFrame(audioFrame, frameSize)) {
                       int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
