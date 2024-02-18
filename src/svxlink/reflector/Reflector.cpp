@@ -142,7 +142,7 @@ Reflector::Reflector(void)
 
     // Configure the VAD instance (assuming FULLBAND audio at 48000 Hz)
     fvad_set_sample_rate(vadInst, 48000);
-    fvad_set_mode(vadInst, 3); // Adjust the mode as needed for your application
+    fvad_set_mode(vadInst, 2); // Adjust the mode as needed for your application
 } /* Reflector::Reflector */
 
 
@@ -392,18 +392,22 @@ public:
         buffer.insert(buffer.end(), data.begin(), data.end());
     }
 
-    bool extractAudioFrame(std::vector<int16_t>& audioFrame) {
+    bool extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize) {
         std::lock_guard<std::mutex> lock(mutex);
-        if (buffer.size() < 960) {
+        // Ensure there are enough bytes for the specified frame size
+        if (buffer.size() < frameSize * 2) { // 2 bytes per sample
             return false;
         }
 
-        for (size_t i = 0; i < audioFrame.size(); ++i) {
-            size_t byteIndex = i * 2;
-            audioFrame[i] = static_cast<int16_t>((buffer[byteIndex + 1] << 8) | buffer[byteIndex]);
+        audioFrame.clear();
+        audioFrame.reserve(frameSize);
+
+        for (size_t i = 0; i < frameSize * 2; i += 2) {
+            int16_t sample = static_cast<int16_t>((buffer[i + 1] << 8) | buffer[i]);
+            audioFrame.push_back(sample);
         }
 
-        buffer.erase(buffer.begin(), buffer.begin() + 960);
+        buffer.erase(buffer.begin(), buffer.begin() + frameSize * 2);
         return true;
     }
 
