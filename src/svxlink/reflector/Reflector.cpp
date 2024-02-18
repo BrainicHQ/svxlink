@@ -141,7 +141,7 @@ Reflector::Reflector(void)
     }
 
     // Configure the VAD instance (assuming FULLBAND audio at 48000 Hz)
-    fvad_set_sample_rate(vadInst, 16000);
+    fvad_set_sample_rate(vadInst, 48000);
     fvad_set_mode(vadInst, 3); // Adjust the mode as needed for your application
 } /* Reflector::Reflector */
 
@@ -462,7 +462,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   client->appendAudioData(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
-                  size_t frameSize = 320; // 20ms of audio at 16kHz
+                  size_t frameSize = 960; // 20ms of audio at 48kHz
 
                   while (client->extractAudioFrame(audioFrame, frameSize)) {
                       int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
