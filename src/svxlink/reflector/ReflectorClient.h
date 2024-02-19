@@ -115,7 +115,7 @@ class ReflectorClient
   public:
     using ClientId = ReflectorUdpMsg::ClientId;
     void appendAudioData(const std::vector<uint8_t>& data);
-    bool extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize);
+    bool extractAudioFrame(std::vector<float>& audioFrame, size_t frameSize);
 
     typedef enum
     {
