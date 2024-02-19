@@ -390,9 +390,10 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     // Create MemoryInfo object for tensor creation
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-    // Prepare the input tensor for the audio data
-    std::vector<int64_t> audioInputTensorShape = {1, 1, static_cast<int64_t>(audioFrame.size())};
-    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(), audioInputTensorShape.data(), audioInputTensorShape.size());
+    std::vector<int64_t> audioInputTensorShape = {1, static_cast<int64_t>(audioFrame.size())};
+    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(
+            memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(),
+            audioInputTensorShape.data(), audioInputTensorShape.size());
 
     // Prepare the sample rate tensor
     std::vector<int64_t> srTensorShape = {1};
