@@ -36,6 +36,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <vector>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 
 /****************************************************************************
  *
@@ -426,6 +427,10 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     std::memcpy(_h.data(), hOutputTensor.GetTensorMutableData<float>(), _h.size() * sizeof(float));
     std::memcpy(_c.data(), cOutputTensor.GetTensorMutableData<float>(), _c.size() * sizeof(float));
 
+    lastVoiceProbability = outputData[0]; // Assuming outputData[0] contains the voice probability
+    lastFrameSize = audioFrame.size();
+    lastMaxAmplitude = *std::max_element(audioFrame.begin(), audioFrame.end());
+
     return voiceDetected;
 }
 
@@ -531,12 +536,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
 
-                          std::cout << "VAD Model Output: Voice Probability = " << outputData[0]
+                          std::cout << "VAD Model Output: Voice Probability = " << lastVoiceProbability
                                     << " (Threshold = " << threshold << ")" << std::endl;
 
                           std::cout << "Processing audio frame: Sample Rate = " << sr[0]
-                                    << ", Frame Size = " << audioFrame.size()
-                                    << ", Max Amplitude = " << *std::max_element(audioFrame.begin(), audioFrame.end()) << std::endl;
+                                    << ", Frame Size = " << lastFrameSize
+                                    << ", Max Amplitude = " << lastMaxAmplitude << std::endl;
                           // Continue checking the next chunk if any
                       }
                   }

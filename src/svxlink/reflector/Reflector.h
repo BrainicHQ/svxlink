@@ -192,6 +192,10 @@ class Reflector : public sigc::trackable
     std::vector<float>::size_type window_size_samples = 1536; // Assuming a fixed window size
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
 
+    float lastVoiceProbability = 0.0f; // Store the last voice probability
+    size_t lastFrameSize = 0; // Store the last frame size
+    float lastMaxAmplitude = 0.0f; // Store the max amplitude of the last frame
+
     // Private methods for Silero VAD
     void initializeSileroVAD(const std::string& modelPath);
     bool processAudioWithSilero(const std::vector<float>& audioFrame);
