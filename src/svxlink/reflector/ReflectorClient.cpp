@@ -39,7 +39,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <vector>
 #include <mutex>
 #include <endian.h>
-#include <cstring>
 
 
 /****************************************************************************
@@ -168,31 +167,8 @@ ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con
     m_udp_heartbeat_tx_cnt(UDP_HEARTBEAT_TX_CNT_RESET),
     m_udp_heartbeat_rx_cnt(UDP_HEARTBEAT_RX_CNT_RESET),
     m_reflector(ref), m_blocktime(0), m_remaining_blocktime(0),
-    m_current_tg(0), srcState(nullptr), srcError(0), oggInitialized(false)
+    m_current_tg(0)
 {
-    // Initialize Opus decoder
-    int error;
-    opusDecoder = opus_decoder_create(opusSampleRate, channels, &error);
-    if (error != OPUS_OK) {
-        std::cerr << "Failed to create OPUS decoder: " << opus_strerror(error) << std::endl;
-        // Handle error appropriately
-    }
-
-    // Initialize libsamplerate resampler
-    srcState = src_new(SRC_SINC_FASTEST, channels, &srcError);
-    if (srcState == nullptr) {
-        std::cerr << "Failed to create libsamplerate resampler: " << src_strerror(srcError) << std::endl;
-        // Handle error appropriately
-    }
-
-    // Initialize Ogg sync and stream states
-    if (ogg_sync_init(&oy) == 0) {
-        oggInitialized = true;
-        ogg_stream_init(&os, 0);
-    } else {
-        std::cerr << "Failed to initialize Ogg sync state." << std::endl;
-    }
-
   m_con->setMaxFrameSize(ReflectorMsg::MAX_PREAUTH_FRAME_SIZE);
   m_con->frameReceived.connect(
       mem_fun(*this, &ReflectorClient::onFrameReceived));
@@ -234,25 +210,6 @@ ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con
 
 ReflectorClient::~ReflectorClient(void)
 {
-    // Cleanup for Opus decoder
-    if (opusDecoder) {
-        opus_decoder_destroy(opusDecoder);
-        opusDecoder = nullptr;
-    }
-
-    // Cleanup for libsamplerate resampler
-    if (srcState) {
-        src_delete(srcState);
-        srcState = nullptr;
-    }
-
-    // Cleanup for Ogg sync and stream states
-    if (oggInitialized) {
-        ogg_stream_clear(&os);
-        ogg_sync_clear(&oy);
-        oggInitialized = false;
-    }
-
   auto client_it = client_map.find(m_client_id);
   assert(client_it != client_map.end());
   client_map.erase(client_it);
@@ -318,115 +275,37 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
 
-// Member variable in ReflectorClient class to accumulate data
-std::vector<uint8_t> accumulatedData;
-
 void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
-    std::cout << "Appending audio data, size: " << data.size() << std::endl;
-
-    // Accumulate data instead of immediately appending to Ogg sync
-    accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
-
-    // Adjust the threshold to at least the minimum expected size of an Ogg page (4 kB)
-    const size_t minPageSize = 6144; // 6 kB
-
-    // Check if accumulated data is sufficient for extraction
-    if (accumulatedData.size() >= minPageSize) { // Define a suitable minimum size based on your context
-        char* buffer = ogg_sync_buffer(&oy, accumulatedData.size());
-        if (buffer != nullptr) {
-            memcpy(buffer, accumulatedData.data(), accumulatedData.size());
-            int result = ogg_sync_wrote(&oy, accumulatedData.size());
-            if (result == 0) {
-                std::cout << "Successfully appended data to Ogg sync state." << std::endl;
-            } else {
-                std::cerr << "Error appending data to Ogg sync state, result: " << result << std::endl;
-            }
-            // Clear accumulated data after successful append
-            accumulatedData.clear();
-        } else {
-            std::cerr << "Failed to allocate buffer in ogg_sync_state." << std::endl;
-        }
-    } else {
-        std::cout << "Accumulating data, total size: " << accumulatedData.size() << std::endl;
-    }
+    audioBuffer.insert(audioBuffer.end(), data.begin(), data.end());
 }
 
-bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t desiredFrameSize) {
+bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
-    if (!oggInitialized) {
-        std::cerr << "Ogg is not initialized." << std::endl;
-        return false;
+    // Check if there's enough data in the buffer to extract a frame
+    if (audioBuffer.size() < frameSize * 2) {
+        return false; // Not enough data
     }
 
-    //audioFrameFloat.clear();
-    std::cout << "Starting to extract audio frame..." << std::endl;
+    // Resize the output vector to the appropriate frame size
+    audioFrameFloat.resize(frameSize);
 
-    ogg_page page;
-    // Attempt to extract a page and decode packets
-    while (ogg_sync_pageout(&oy, &page) == 1) {
-        if (ogg_stream_pagein(&os, &page) != 0) {
-            std::cerr << "Failed to add page to Ogg stream." << std::endl;
-            continue; // Attempt next page
-        }
+    for (size_t i = 0, j = 0; i < frameSize * 2; i += 2, ++j) {
+        uint16_t be_sample = static_cast<uint16_t>((audioBuffer[i] << 8) | audioBuffer[i + 1]);
 
-        std::cout << "Added page to Ogg stream." << std::endl;
+        // Convert from big-endian to host endianess. Adjust this part if endianess conversion is needed.
+        int16_t sample = static_cast<int16_t>(be_sample); // Direct assignment, assuming big-endian data
 
-        ogg_packet packet;
-
-        while (ogg_stream_packetout(&os, &packet) == 1) {
-            // Decode Opus packet
-            std::vector<float> decodedPcm(5760); // Adjust size dynamically if needed
-            int numSamples = opus_decode_float(opusDecoder, packet.packet, packet.bytes, decodedPcm.data(), decodedPcm.size(), 0);
-            if (numSamples <= 0) {
-                std::cerr << "Failed to decode Opus packet: " << opus_strerror(numSamples) << std::endl;
-                continue; // Skip this packet if decoding fails
-            }
-
-            // Prepare for resampling
-            std::vector<float> resampledOutput(numSamples); // Pre-allocate with expected size
-            SRC_DATA srcData;
-            memset(&srcData, 0, sizeof(SRC_DATA));
-            srcData.data_in = decodedPcm.data();
-            srcData.input_frames = numSamples;
-            srcData.data_out = resampledOutput.data();
-            srcData.output_frames = resampledOutput.size();
-            srcData.src_ratio = static_cast<double>(targetSampleRate) / static_cast<double>(opusSampleRate);
-
-            int resampleError = src_process(srcState, &srcData);
-            if (resampleError) {
-                std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
-                continue; // Skip this packet if resampling fails
-            }
-
-            // Display if resampling is successful
-            std::cout << "Resampled " << numSamples << " samples to " << srcData.output_frames_gen << " samples." << std::endl;
-
-            // Adjust the size of the resampled output vector to match the generated frame count
-            resampledOutput.resize(srcData.output_frames_gen);
-
-            // Append resampled audio to the output buffer
-            audioFrameFloat.insert(audioFrameFloat.end(), resampledOutput.begin(), resampledOutput.end());
-
-            // Check if we've accumulated enough data for processing
-            if (audioFrameFloat.size() >= desiredFrameSize) {
-                return true; // Indicate that we have enough data for an audio frame
-            }
-
-            // Display the current size of the output buffer
-            std::cout << "Current size of audio frame: " << audioFrameFloat.size() << std::endl;
-        }
+        // Normalize to [-1.0, 1.0] and convert to float
+        audioFrameFloat[j] = sample / 32768.0f;
     }
 
-    if (audioFrameFloat.size() < desiredFrameSize) {
-        std::cerr << "Not enough data in buffer. Current size: " << audioFrameFloat.size() << ", required: " << desiredFrameSize << std::endl;
-    }
+    // Efficiently remove the processed elements from the buffer
+    audioBuffer.erase(audioBuffer.begin(), audioBuffer.begin() + frameSize * 2);
 
-    return false; // Not enough samples were decoded or resampled to meet the desired frame size
+    return true;
 }
-
-
 
 /****************************************************************************
  *

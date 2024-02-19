@@ -435,46 +435,6 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     return voiceDetected;
 }
 
-std::string writeAudioDataToFile(const std::vector<unsigned char>& audioData) {
-    std::string tempFilePath = "/tmp/temp_audio_data.bin"; // Ensure this directory is writable
-    std::ofstream outFile(tempFilePath, std::ios::out | std::ios::binary);
-    if (!outFile) {
-        std::cerr << "Failed to create temporary file for audio data at " << tempFilePath << std::endl;
-        perror("Error");
-        return "";
-    }
-
-    if (!audioData.empty()) {
-        outFile.write(reinterpret_cast<const char*>(audioData.data()), audioData.size());
-    } else {
-        std::cerr << "Warning: Attempted to write empty audio data to file." << std::endl;
-    }
-    outFile.close();
-
-    return tempFilePath;
-}
-
-void detectAudioDataFormat(const std::string& filePath) {
-    std::string command = "ffprobe -v error -show_entries format=format_name,stream=codec_name -of default=noprint_wrappers=1 \"" + filePath + "\" 2>&1";
-    std::array<char, 128> buffer;
-    std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-    if (!pipe) {
-        throw std::runtime_error("popen() failed!");
-    }
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-        result += buffer.data();
-    }
-    
-    if (!result.empty()) {
-        std::cout << "ffprobe output:\n" << result << std::endl;
-    } else {
-        std::cout << "ffprobe did not return any output for the file: " << filePath << std::endl;
-    }
-
-    std::remove(filePath.c_str());
-}
-
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
 {
@@ -551,22 +511,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   std::cerr << "*** WARNING[" << client->callsign() << "]: Could not unpack incoming MsgUdpAudioV1 message" << std::endl;
                   return;
               }
-
-
-               // output the first hex content of msg.audioData() to check the audio data type
-              std::cout << "First 16 bytes of audio data: ";
-              for (int i = 0; i < 16; i++) {
-                  std::cout << std::hex << (int)msg[i] << " ";
-              }
-              std::cout << std::endl;
-
-
-               //detect the format and compression of msg.audioData() using ffprobe
-                //  std::string tempFilePath = writeAudioDataToFile(msg.audioData());
-                //   if (!tempFilePath.empty()) {
-                //   // Detect format and compression
-                //   detectAudioDataFormat(tempFilePath);
-                //   }
           
               std::cout << "Received audio data from " << client->callsign() << std::endl;
 
