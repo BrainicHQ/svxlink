@@ -530,6 +530,13 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       else // No voice detected
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
+
+                          std::cout << "VAD Model Output: Voice Probability = " << outputData[0]
+                                    << " (Threshold = " << threshold << ")" << std::endl;
+
+                          std::cout << "Processing audio frame: Sample Rate = " << sr[0]
+                                    << ", Frame Size = " << audioFrame.size()
+                                    << ", Max Amplitude = " << *std::max_element(audioFrame.begin(), audioFrame.end()) << std::endl;
                           // Continue checking the next chunk if any
                       }
                   }
