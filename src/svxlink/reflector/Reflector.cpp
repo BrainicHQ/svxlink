@@ -134,7 +134,7 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
     // Initialize the Silero VAD
-    initializeSileroVAD(L"silero_vad.onnx");
+    initializeSileroVAD("silero_vad.onnx");
 } /* Reflector::Reflector */
 
 void Reflector::initializeSileroVAD(const std::string& modelPath) {
@@ -384,22 +384,32 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
         return false;
     }
 
-    sr = {16000};
+    // Assuming sr is a class member of type std::vector<int64_t> initialized elsewhere
+    sr = {16000}; // This line might be redundant if sr is always 16000 and initialized in the constructor
+
+    // Create MemoryInfo object for tensor creation
+    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
     // Prepare the input tensor for the audio data
     std::vector<int64_t> audioInputTensorShape = {1, 1, static_cast<int64_t>(audioFrame.size())};
-    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(allocator, const_cast<float*>(audioFrame.data()), audioFrame.size(), audioInputTensorShape.data(), audioInputTensorShape.size());
+    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(), audioInputTensorShape.data(), audioInputTensorShape.size());
 
     // Prepare the sample rate tensor
     std::vector<int64_t> srTensorShape = {1};
-    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(allocator, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
+    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(memory_info, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
 
     // Prepare the hidden and cell state tensors
     std::vector<int64_t> hcTensorShape = {2, 1, 64}; // Adjust the shape based on your model's requirements
-    Ort::Value hTensor = Ort::Value::CreateTensor<float>(allocator, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
-    Ort::Value cTensor = Ort::Value::CreateTensor<float>(allocator, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
+    Ort::Value hTensor = Ort::Value::CreateTensor<float>(memory_info, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
+    Ort::Value cTensor = Ort::Value::CreateTensor<float>(memory_info, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
 
-    // Group all inputs for the model
-    std::array<Ort::Value, 4> ortInputs = {audioInputTensor, srTensor, hTensor, cTensor};
+    // Group all inputs for the model, using std::move to avoid copying Ort::Value objects
+    std::array<Ort::Value, 4> ortInputs = {
+            std::move(audioInputTensor),
+            std::move(srTensor),
+            std::move(hTensor),
+            std::move(cTensor)
+    };
 
     // Run the model
     auto ortOutputs = ortSession->Run(Ort::RunOptions{nullptr}, inputNodeNames.data(), ortInputs.data(), ortInputs.size(), outputNodeNames.data(), outputNodeNames.size());
