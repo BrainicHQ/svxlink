@@ -39,6 +39,9 @@ target_link_libraries(svxreflector ${LIBS})
 set_target_properties(svxreflector PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
         INSTALL_RPATH "${ONNXRUNTIME_ROOT_DIR}/lib"
+        CXX_STANDARD 14
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
 )
 
 # Install targets
