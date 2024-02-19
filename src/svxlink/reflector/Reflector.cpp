@@ -475,7 +475,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                               TGHandler::instance()->setTalkerForTG(tg, client);
                               broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
                           }
-                          break; // Break after processing a voice-active frame
                       }
                       else if (vadResult == 0) // No voice detected
                       {
@@ -487,6 +486,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                           std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
                       }
                   }
+                  break; // Exit the message handling after all frames are processed
               }
           }
           break;
