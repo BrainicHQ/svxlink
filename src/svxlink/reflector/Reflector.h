@@ -189,7 +189,7 @@ class Reflector : public sigc::trackable
     std::vector<const char*> outputNodeNames = {"output", "hn", "cn"};
     std::vector<float> _h, _c; // Hidden and cell states
     float threshold; // VAD threshold
-    std::vector<float>::size_type window_size_samples = 400; // Assuming a fixed window size
+    std::vector<float>::size_type window_size_samples = 1536; // Assuming a fixed window size
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
 
     // Private methods for Silero VAD

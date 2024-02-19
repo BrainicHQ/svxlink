@@ -143,7 +143,7 @@ void Reflector::initializeSileroVAD(const std::string& modelPath) {
     sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
     ortSession = std::make_unique<Ort::Session>(ortEnv, modelPath.c_str(), sessionOptions);
 
-    window_size_samples = 400; // This should match your model's expected input size
+    window_size_samples = 1536; // This should match your model's expected input size
     _h.resize(2 * 1 * 64, 0.0f); // Initialize hidden state to zeros
     _c.resize(2 * 1 * 64, 0.0f); // Initialize cell state to zeros
     threshold = 0.5; // Example threshold, adjust based on your needs
