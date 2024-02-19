@@ -35,7 +35,7 @@ set(LIBS asynccpp asyncaudio asynccore svxmisc ${LIBS})
 add_executable(svxreflector
         svxreflector.cpp Reflector.cpp ReflectorClient.cpp TGHandler.cpp
 )
-target_link_libraries(svxreflector ${LIBS})
+target_link_libraries(svxreflector ${LIBS} ${ONNX_RUNTIME_LIB})
 set_target_properties(svxreflector PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
         INSTALL_RPATH "${ONNXRUNTIME_ROOT_DIR}/lib"
