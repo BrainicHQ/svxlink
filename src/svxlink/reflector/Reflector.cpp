@@ -134,7 +134,7 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
     // Initialize the Silero VAD
-    initializeSileroVAD("silero_vad.onnx");
+    initializeSileroVAD("/home/silviu/silero_vad.onnx");
 } /* Reflector::Reflector */
 
 void Reflector::initializeSileroVAD(const std::string& modelPath) {
