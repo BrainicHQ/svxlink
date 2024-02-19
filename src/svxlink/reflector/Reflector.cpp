@@ -510,7 +510,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   client->appendAudioData(msg.audioData());
 
                   std::vector<float> audioFrameFloat;
-                  size_t frameSize = 320;  // 20ms of audio at 16kHz
+                  size_t frameSize = 1536;
 
                   while (client->extractAudioFrame(audioFrameFloat, frameSize)) {
                       // Prepare input tensor from audioFrameFloat for Silero VAD
