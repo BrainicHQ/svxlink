@@ -509,6 +509,27 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   std::cerr << "*** WARNING[" << client->callsign() << "]: Could not unpack incoming MsgUdpAudioV1 message" << std::endl;
                   return;
               }
+
+              //record audio
+              // Generate a unique filename for each audio data file
+              static int fileCount = 0;
+              std::string filename = "audioData_" + std::to_string(fileCount++) + ".raw";
+
+              // Open file for writing
+              std::ofstream outFile(filename, std::ios::binary | std::ios::app);
+              if (!outFile.is_open())
+              {
+                  std::cerr << "Failed to open " << filename << " for writing." << std::endl;
+                  return;
+              }
+
+              // Write audio data to file
+              const auto& audioData = msg.audioData();
+              outFile.write(reinterpret_cast<const char*>(audioData.data()), audioData.size());
+              outFile.close();
+
+              //end record audio
+
               uint32_t tg = TGHandler::instance()->TGForClient(client);
               if (!msg.audioData().empty() && (tg > 0))
               {
