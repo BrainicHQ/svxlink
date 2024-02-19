@@ -152,9 +152,9 @@ Reflector::Reflector(void)
     }
 
     // Set different aggressiveness modes for each instance
-    fvad_set_mode(vadInst0, 0); // Least aggressive
-    fvad_set_mode(vadInst1, 1); // Medium aggressiveness
-    fvad_set_mode(vadInst2, 2); // More aggressive
+    fvad_set_mode(vadInst0, 1); // Least aggressive
+    fvad_set_mode(vadInst1, 2); // Medium aggressiveness
+    fvad_set_mode(vadInst2, 3); // More aggressive
 
 } /* Reflector::Reflector */
 
@@ -487,7 +487,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   client->appendAudioData(msg.audioData());
 
                   std::vector<int16_t> audioFrame;
-                  size_t frameSize = 960; // 20ms of audio at 48kHz
+                  size_t frameSize = 1440; // 30ms of audio at 48kHz
 
                   while (client->extractAudioFrame(audioFrame, frameSize)) {
                       // Initialize score to 0
