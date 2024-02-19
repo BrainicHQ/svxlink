@@ -133,16 +133,29 @@ Reflector::Reflector(void)
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
-    // Initialize the VAD instance
-    vadInst = fvad_new();
-    if (!vadInst) {
-        cerr << "*** ERROR: Failed to create VAD instance\n";
-        exit(1); // Or handle the error as appropriate
+    // Initialize three VAD instances with different aggressiveness levels
+    vadInst0 = fvad_new();
+    vadInst1 = fvad_new();
+    vadInst2 = fvad_new();
+
+    if (!vadInst0 || !vadInst1 || !vadInst2) {
+        std::cerr << "*** ERROR: Failed to create one or more VAD instances\n";
+        exit(EXIT_FAILURE); // Or handle the error as appropriate
     }
 
-    // Configure the VAD instance (assuming FULLBAND audio at 48000 Hz)
-    fvad_set_sample_rate(vadInst, 48000);
-    fvad_set_mode(vadInst, 3); // Adjust the mode as needed for your application
+    // Assuming FULLBAND audio at 48000 Hz for all instances
+    if (fvad_set_sample_rate(vadInst0, 48000) ||
+        fvad_set_sample_rate(vadInst1, 48000) ||
+        fvad_set_sample_rate(vadInst2, 48000)) {
+        std::cerr << "*** ERROR: Failed to set sample rate on one or more VAD instances\n";
+        exit(EXIT_FAILURE); // Or handle the error as appropriate
+    }
+
+    // Set different aggressiveness modes for each instance
+    fvad_set_mode(vadInst0, 0); // Least aggressive
+    fvad_set_mode(vadInst1, 1); // Medium aggressiveness
+    fvad_set_mode(vadInst2, 2); // More aggressive
+
 } /* Reflector::Reflector */
 
 
@@ -158,11 +171,20 @@ Reflector::~Reflector(void)
   ReflectorClient::cleanup();
   delete TGHandler::instance();
 
-    // Free the VAD instance
-    if (vadInst) {
-        fvad_free(vadInst);
-        vadInst = nullptr;
+    // Free the VAD instances
+    if (vadInst0) {
+        fvad_free(vadInst0);
+        vadInst0 = nullptr;
     }
+    if (vadInst1) {
+        fvad_free(vadInst1);
+        vadInst1 = nullptr;
+    }
+    if (vadInst2) {
+        fvad_free(vadInst2);
+        vadInst2 = nullptr;
+    }
+
 } /* Reflector::~Reflector */
 
 
@@ -446,6 +468,9 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
     case MsgUdpHeartbeat::TYPE:
       break;
 
+          // Assuming vadInst0, vadInst1, and vadInst2 are initialized elsewhere in your code
+// with aggressiveness levels 0, 1, and 2, respectively.
+
       case MsgUdpAudio::TYPE:
       {
           if (!client->isBlocked())
@@ -465,8 +490,26 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   size_t frameSize = 960; // 20ms of audio at 48kHz
 
                   while (client->extractAudioFrame(audioFrame, frameSize)) {
-                      int vadResult = fvad_process(vadInst, audioFrame.data(), frameSize);
-                      if (vadResult == 1) // Voice detected
+                      // Initialize score to 0
+                      int score = 0;
+
+                      // Process with least aggressive VAD (level 0)
+                      if (fvad_process(vadInst0, audioFrame.data(), frameSize) == 1) {
+                          score = 1; // Speech detected at least aggressive level
+                          // Process with medium aggressive VAD (level 1)
+                          if (fvad_process(vadInst1, audioFrame.data(), frameSize) == 1) {
+                              score = 2; // Speech detected at medium aggressive level
+                              // Process with most aggressive VAD (level 2)
+                              if (fvad_process(vadInst2, audioFrame.data(), frameSize) == 1) {
+                                  score = 3; // Speech detected at most aggressive level
+                              }
+                          }
+                      }
+
+                      // Use the score for further logic, here just printing it
+                      std::cout << client->callsign() << ": VAD Score: " << score << std::endl;
+
+                      if (score > 0) // If any VAD detected voice
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
                           ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
@@ -476,14 +519,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                               broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
                           }
                       }
-                      else if (vadResult == 0) // No voice detected
+                      else // No voice detected by any VAD
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
                           continue; // Continue checking the next chunk if any
-                      }
-                      else // Error in VAD processing
-                      {
-                          std::cerr << "*** ERROR[" << client->callsign() << "]: VAD processing error, clearing accumulated data." << std::endl;
                       }
                   }
                   break; // Exit the message handling after all frames are processed

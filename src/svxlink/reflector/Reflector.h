@@ -184,7 +184,9 @@ class Reflector : public sigc::trackable
     void requestQsy(ReflectorClient *client, uint32_t tg);
 
   private:
-    Fvad* vadInst;
+    Fvad* vadInst0;
+    Fvad* vadInst1;
+    Fvad* vadInst2;
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
     typedef Async::TcpServer<Async::FramedTcpConnection> FramedTcpServer;
