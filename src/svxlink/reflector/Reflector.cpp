@@ -509,11 +509,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               {
                   client->appendAudioData(msg.audioData());
 
-                  std::vector<int16_t> audioFrameInt16;
                   std::vector<float> audioFrameFloat;
-                  size_t frameSize = 960; // 20ms of audio at 48kHz
+                  size_t frameSize = 320;  // 20ms of audio at 16kHz
 
-                  while (client->extractAudioFrame(audioFrameInt16, frameSize)) {
+                  while (client->extractAudioFrame(audioFrameFloat, frameSize)) {
                       // Prepare input tensor from audioFrameFloat for Silero VAD
                       bool voiceDetected = processAudioWithSilero(audioFrameFloat);
 
