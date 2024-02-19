@@ -4,6 +4,15 @@ set(LIBS ${LIBS} ${POPT_LIBRARIES})
 include_directories(${POPT_INCLUDE_DIRS})
 add_definitions(${POPT_DEFINITIONS})
 
+# ONNX Runtime
+set(ONNXRUNTIME_ROOT_DIR "/home/silviu/onnxruntime")
+include_directories(${ONNXRUNTIME_ROOT_DIR}/include)
+find_library(ONNX_RUNTIME_LIB onnxruntime HINTS ${ONNXRUNTIME_ROOT_DIR}/lib)
+
+if(NOT ONNX_RUNTIME_LIB)
+    message(FATAL_ERROR "ONNX Runtime library not found")
+endif()
+
 # Find the GCrypt library
 find_package(GCrypt REQUIRED)
 set(LIBS ${LIBS} ${GCRYPT_LIBRARIES})
@@ -19,32 +28,17 @@ pkg_check_modules (JSONCPP REQUIRED jsoncpp)
 include_directories(${JSONCPP_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${JSONCPP_LIBRARIES})
 
-# Explicitly set and use the paths for the fvad library
-set(fvad_INCLUDE_DIR "/usr/local/include") # Path to the fvad header files
-set(fvad_LIBRARY "/usr/local/lib/libfvad.so") # Path to the fvad library file
-
-# Include the fvad header files
-include_directories(${fvad_INCLUDE_DIR})
-
-# Find the fvad library to link against
-find_library(fvad_LIB NAMES fvad PATHS "/usr/local/lib" NO_DEFAULT_PATH)
-if(NOT fvad_LIB)
-    message(FATAL_ERROR "fvad library not found")
-endif()
-
-# Add the fvad library to the list of libraries to link against
-set(LIBS ${LIBS} ${fvad_LIB})
-
 # Add project libraries
 set(LIBS asynccpp asyncaudio asynccore svxmisc ${LIBS})
 
 # Build the executable
 add_executable(svxreflector
-  svxreflector.cpp Reflector.cpp ReflectorClient.cpp TGHandler.cpp
+        svxreflector.cpp Reflector.cpp ReflectorClient.cpp TGHandler.cpp
 )
 target_link_libraries(svxreflector ${LIBS})
 set_target_properties(svxreflector PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
+        RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
+        INSTALL_RPATH "${ONNXRUNTIME_ROOT_DIR}/lib"
 )
 
 # Install targets

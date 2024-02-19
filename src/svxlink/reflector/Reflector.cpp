@@ -133,31 +133,21 @@ Reflector::Reflector(void)
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
-    // Initialize three VAD instances with different aggressiveness levels
-    vadInst0 = fvad_new();
-    vadInst1 = fvad_new();
-    vadInst2 = fvad_new();
-
-    if (!vadInst0 || !vadInst1 || !vadInst2) {
-        std::cerr << "*** ERROR: Failed to create one or more VAD instances\n";
-        exit(EXIT_FAILURE); // Or handle the error as appropriate
-    }
-
-    // Assuming FULLBAND audio at 48000 Hz for all instances
-    if (fvad_set_sample_rate(vadInst0, 48000) ||
-        fvad_set_sample_rate(vadInst1, 48000) ||
-        fvad_set_sample_rate(vadInst2, 48000)) {
-        std::cerr << "*** ERROR: Failed to set sample rate on one or more VAD instances\n";
-        exit(EXIT_FAILURE); // Or handle the error as appropriate
-    }
-
-    // Set different aggressiveness modes for each instance
-    fvad_set_mode(vadInst0, 1); // Least aggressive
-    fvad_set_mode(vadInst1, 2); // Medium aggressiveness
-    fvad_set_mode(vadInst2, 3); // More aggressive
-
+    // Initialize the Silero VAD
+    initializeSileroVAD(L"silero_vad.onnx");
 } /* Reflector::Reflector */
 
+void Reflector::initializeSileroVAD(const std::string& modelPath) {
+    Ort::SessionOptions sessionOptions;
+    sessionOptions.SetIntraOpNumThreads(1);
+    sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+    ortSession = std::make_unique<Ort::Session>(ortEnv, modelPath.c_str(), sessionOptions);
+
+    window_size_samples = 400; // This should match your model's expected input size
+    _h.resize(2 * 1 * 64, 0.0f); // Initialize hidden state to zeros
+    _c.resize(2 * 1 * 64, 0.0f); // Initialize cell state to zeros
+    threshold = 0.5; // Example threshold, adjust based on your needs
+}
 
 Reflector::~Reflector(void)
 {
@@ -170,21 +160,6 @@ Reflector::~Reflector(void)
   m_client_con_map.clear();
   ReflectorClient::cleanup();
   delete TGHandler::instance();
-
-    // Free the VAD instances
-    if (vadInst0) {
-        fvad_free(vadInst0);
-        vadInst0 = nullptr;
-    }
-    if (vadInst1) {
-        fvad_free(vadInst1);
-        vadInst1 = nullptr;
-    }
-    if (vadInst2) {
-        fvad_free(vadInst2);
-        vadInst2 = nullptr;
-    }
-
 } /* Reflector::~Reflector */
 
 
@@ -402,6 +377,47 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
+bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
+    // Ensure the input vector is correctly sized
+    if (audioFrame.size() != window_size_samples) {
+        std::cerr << "Audio frame size does not match expected window size." << std::endl;
+        return false;
+    }
+
+    sr = {16000};
+    // Prepare the input tensor for the audio data
+    std::vector<int64_t> audioInputTensorShape = {1, 1, static_cast<int64_t>(audioFrame.size())};
+    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(allocator, const_cast<float*>(audioFrame.data()), audioFrame.size(), audioInputTensorShape.data(), audioInputTensorShape.size());
+
+    // Prepare the sample rate tensor
+    std::vector<int64_t> srTensorShape = {1};
+    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(allocator, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
+
+    // Prepare the hidden and cell state tensors
+    std::vector<int64_t> hcTensorShape = {2, 1, 64}; // Adjust the shape based on your model's requirements
+    Ort::Value hTensor = Ort::Value::CreateTensor<float>(allocator, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
+    Ort::Value cTensor = Ort::Value::CreateTensor<float>(allocator, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
+
+    // Group all inputs for the model
+    std::array<Ort::Value, 4> ortInputs = {audioInputTensor, srTensor, hTensor, cTensor};
+
+    // Run the model
+    auto ortOutputs = ortSession->Run(Ort::RunOptions{nullptr}, inputNodeNames.data(), ortInputs.data(), ortInputs.size(), outputNodeNames.data(), outputNodeNames.size());
+
+    // Interpret the primary output to determine voice activity
+    auto& outputTensor = ortOutputs[0];
+    float* outputData = outputTensor.GetTensorMutableData<float>();
+    bool voiceDetected = outputData[0] > threshold; // Use the class's threshold attribute
+
+    // Update the hidden and cell states with the output from the model
+    auto& hOutputTensor = ortOutputs[1];
+    auto& cOutputTensor = ortOutputs[2];
+    std::memcpy(_h.data(), hOutputTensor.GetTensorMutableData<float>(), _h.size() * sizeof(float));
+    std::memcpy(_c.data(), cOutputTensor.GetTensorMutableData<float>(), _c.size() * sizeof(float));
+
+    return voiceDetected;
+}
+
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
 {
@@ -468,9 +484,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
     case MsgUdpHeartbeat::TYPE:
       break;
 
-          // Assuming vadInst0, vadInst1, and vadInst2 are initialized elsewhere in your code
-// with aggressiveness levels 0, 1, and 2, respectively.
-
       case MsgUdpAudio::TYPE:
       {
           if (!client->isBlocked())
@@ -486,30 +499,15 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               {
                   client->appendAudioData(msg.audioData());
 
-                  std::vector<int16_t> audioFrame;
-                  size_t frameSize = 1440; // 30ms of audio at 48kHz
+                  std::vector<int16_t> audioFrameInt16;
+                  std::vector<float> audioFrameFloat;
+                  size_t frameSize = 960; // 20ms of audio at 48kHz
 
-                  while (client->extractAudioFrame(audioFrame, frameSize)) {
-                      // Initialize score to 0
-                      int score = 0;
+                  while (client->extractAudioFrame(audioFrameInt16, frameSize)) {
+                      // Prepare input tensor from audioFrameFloat for Silero VAD
+                      bool voiceDetected = processAudioWithSilero(audioFrameFloat);
 
-                      // Process with least aggressive VAD (level 0)
-                      if (fvad_process(vadInst0, audioFrame.data(), frameSize) == 1) {
-                          score = 1; // Speech detected at least aggressive level
-                          // Process with medium aggressive VAD (level 1)
-                          if (fvad_process(vadInst1, audioFrame.data(), frameSize) == 1) {
-                              score = 2; // Speech detected at medium aggressive level
-                              // Process with most aggressive VAD (level 2)
-                              if (fvad_process(vadInst2, audioFrame.data(), frameSize) == 1) {
-                                  score = 3; // Speech detected at most aggressive level
-                              }
-                          }
-                      }
-
-                      // Use the score for further logic, here just printing it
-                      std::cout << client->callsign() << ": VAD Score: " << score << std::endl;
-
-                      if (score > 0) // If any VAD detected voice
+                      if (voiceDetected) // Voice detected
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
                           ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
@@ -519,10 +517,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                               broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
                           }
                       }
-                      else // No voice detected by any VAD
+                      else // No voice detected
                       {
                           std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
-                          continue; // Continue checking the next chunk if any
+                          // Continue checking the next chunk if any
                       }
                   }
                   break; // Exit the message handling after all frames are processed
@@ -530,6 +528,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
           }
           break;
       }
+
 
           //case MsgUdpAudio::TYPE:
     //{

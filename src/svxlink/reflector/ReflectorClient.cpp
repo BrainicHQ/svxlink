@@ -280,21 +280,28 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     audioBuffer.insert(audioBuffer.end(), data.begin(), data.end());
 }
 
-bool ReflectorClient::extractAudioFrame(std::vector<int16_t>& audioFrame, size_t frameSize) {
+bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
     // Ensure there's enough data for one frame. Remember, 2 bytes per sample.
     if (audioBuffer.size() < frameSize * 2) {
         return false; // Not enough data
     }
 
-    audioFrame.clear();
-    audioFrame.reserve(frameSize);
+    std::vector<int16_t> audioFrameInt16;
+    audioFrameInt16.reserve(frameSize);
 
     for (size_t i = 0; i < frameSize * 2; i += 2) {
         uint16_t be_sample = static_cast<uint16_t>((audioBuffer[i] << 8) | audioBuffer[i + 1]);
         int16_t sample = static_cast<int16_t>(be16toh(be_sample)); // Convert from big-endian to host endianess
-        audioFrame.push_back(sample);
+        audioFrameInt16.push_back(sample);
     }
+
+    // Convert int16_t samples to float and normalize
+    audioFrameFloat.resize(audioFrameInt16.size());
+    std::transform(audioFrameInt16.begin(), audioFrameInt16.end(), audioFrameFloat.begin(),
+                   [](int16_t sample) -> float {
+                       return sample / 32768.0f; // Normalize to [-1.0, 1.0]
+                   });
 
     // Remove the extracted data from the buffer.
     audioBuffer.erase(audioBuffer.begin(), audioBuffer.begin() + frameSize * 2);

@@ -77,9 +77,7 @@ namespace Async
 class ReflectorMsg;
 class ReflectorUdpMsg;
 
-extern "C" {
-#include <fvad.h>
-}
+#include "onnxruntime_cxx_api.h"
 /****************************************************************************
  *
  * Forward declarations of classes inside of the declared namespace
@@ -184,9 +182,16 @@ class Reflector : public sigc::trackable
     void requestQsy(ReflectorClient *client, uint32_t tg);
 
   private:
-    Fvad* vadInst0;
-    Fvad* vadInst1;
-    Fvad* vadInst2;
+    Ort::Env ortEnv{ORT_LOGGING_LEVEL_WARNING, "SileroVAD"};
+    std::unique_ptr<Ort::Session> ortSession;
+    Ort::AllocatorWithDefaultOptions allocator;
+    std::vector<const char*> inputNodeNames = {"input", "sr", "h", "c"};
+    std::vector<const char*> outputNodeNames = {"output", "hn", "cn"};
+
+    // Private methods for Silero VAD
+    void initializeSileroVAD(const std::string& modelPath);
+    bool processAudioWithSilero(const std::vector<float>& audioFrame);
+
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
     typedef Async::TcpServer<Async::FramedTcpConnection> FramedTcpServer;
