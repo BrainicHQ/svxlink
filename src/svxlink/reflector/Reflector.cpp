@@ -144,7 +144,6 @@ void Reflector::initializeSileroVAD(const std::string& modelPath) {
     sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
     ortSession = std::make_unique<Ort::Session>(ortEnv, modelPath.c_str(), sessionOptions);
 
-    window_size_samples = 1536; // This should match your model's expected input size
     _h.resize(2 * 1 * 64, 0.0f); // Initialize hidden state to zeros
     _c.resize(2 * 1 * 64, 0.0f); // Initialize cell state to zeros
     threshold = 0.5; // Example threshold, adjust based on your needs
@@ -516,7 +515,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   client->appendAudioData(msg.audioData());
 
                   std::vector<float> audioFrameFloat;
-                  size_t frameSize = 1536;
 
                   while (client->extractAudioFrame(audioFrameFloat, frameSize)) {
                       // Prepare input tensor from audioFrameFloat for Silero VAD
