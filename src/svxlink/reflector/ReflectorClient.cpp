@@ -168,8 +168,8 @@ ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con
     m_udp_heartbeat_tx_cnt(UDP_HEARTBEAT_TX_CNT_RESET),
     m_udp_heartbeat_rx_cnt(UDP_HEARTBEAT_RX_CNT_RESET),
     m_reflector(ref), m_blocktime(0), m_remaining_blocktime(0),
-    m_current_tg(0), opusDecoder(nullptr), srcState(nullptr), srcError(0),
-    oggInitialized(false)
+    opusDecoder(nullptr), srcState(nullptr), srcError(0), oggInitialized(false),
+    m_current_tg(0)
 {
     // Initialize Opus decoder
     int error;
