@@ -394,6 +394,9 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
                 continue; // Skip this packet if resampling fails
             }
 
+            // Display if resampling is successful
+            std::cout << "Resampled " << numSamples << " samples to " << srcData.output_frames_gen << " samples." << std::endl;
+
             // Adjust the size of the resampled output vector to match the generated frame count
             resampledOutput.resize(srcData.output_frames_gen);
 
