@@ -342,13 +342,18 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         return false;
     }
 
+    std::cout << "Starting to extract audio frame..." << std::endl;
+
     static std::vector<float> resampleBuffer;
     ogg_page page;
 
     while (ogg_sync_pageout(&oy, &page) == 1) {
+        std::cout << "Extracted an Ogg page." << std::endl;
         if (!ogg_stream_pagein(&os, &page)) {
+            std::cout << "Page added to Ogg stream." << std::endl;
             ogg_packet packet;
             while (ogg_stream_packetout(&os, &packet) == 1) {
+                std::cout << "Extracted an Ogg packet." << std::endl;
 
                 constexpr int maxFrameSize = 5760;
                 float pcm[maxFrameSize];
@@ -358,12 +363,13 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
                     continue;
                 }
 
-                // Calculate the required output buffer size more accurately
+                std::cout << "Decoded Opus packet, frame count: " << frameCount << std::endl;
+
                 int outputFrameEstimate = static_cast<int>(frameCount * (static_cast<double>(targetSampleRate) / opusSampleRate));
-                float* resampledOutput = new (std::nothrow) float[outputFrameEstimate + 256]; // Using nothrow to safely handle allocation failure
+                float* resampledOutput = new (std::nothrow) float[outputFrameEstimate + 256];
                 if (!resampledOutput) {
                     std::cerr << "Failed to allocate memory for resampled output." << std::endl;
-                    continue; // Skip this packet if memory allocation fails
+                    continue;
                 }
 
                 SRC_DATA srcData;
@@ -380,21 +386,27 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
                     continue;
                 }
 
+                std::cout << "Resampled audio, generated frames: " << srcData.output_frames_gen << std::endl;
+
                 resampleBuffer.insert(resampleBuffer.end(), resampledOutput, resampledOutput + srcData.output_frames_gen);
                 delete[] resampledOutput;
 
                 if (resampleBuffer.size() >= frameSize) {
+                    std::cout << "Sufficient data in resampleBuffer, size: " << resampleBuffer.size() << std::endl;
                     audioFrameFloat.assign(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
                     resampleBuffer.erase(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
                     return true;
                 }
             }
+        } else {
+            std::cerr << "Failed to add page to Ogg stream." << std::endl;
         }
     }
 
-    // Optionally, log if exiting because the buffer doesn't have enough data
     if (resampleBuffer.size() < frameSize) {
         std::cerr << "Not enough data in resampleBuffer. Current size: " << resampleBuffer.size() << ", required: " << frameSize << std::endl;
+    } else {
+        std::cout << "Exiting with resampleBuffer size: " << resampleBuffer.size() << std::endl;
     }
 
     return false;
