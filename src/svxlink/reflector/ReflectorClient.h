@@ -440,8 +440,8 @@ class ReflectorClient
     OpusDecoder* opusDecoder = nullptr;
     SRC_STATE* srcState = nullptr;
     int srcError = 0;
-    ogg_sync_state oy; // Ogg sync state for buffering data
-    ogg_stream_state os; // Ogg stream state for packet-to-page conversion
+    ogg_sync_state oy;
+    ogg_stream_state os;
     bool oggInitialized = false;
     const int opusSampleRate = 48000;
     const int targetSampleRate = 16000;
