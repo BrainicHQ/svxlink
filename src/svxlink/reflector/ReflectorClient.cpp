@@ -329,7 +329,7 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
 
     // Adjust the threshold to at least the minimum expected size of an Ogg page (4 kB)
-    const size_t minPageSize = 4096; // 4 kB
+    const size_t minPageSize = 6144; // 6 kB
 
     // Check if accumulated data is sufficient for extraction
     if (accumulatedData.size() >= minPageSize) { // Define a suitable minimum size based on your context
