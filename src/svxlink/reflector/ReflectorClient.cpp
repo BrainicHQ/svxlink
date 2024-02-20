@@ -352,9 +352,6 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
 bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t desiredFrameSize) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
-    // audioFrameFloat size
-    std::cout << "extractAudioFrame: audioFrameFloat size: " << audioFrameFloat.size() << std::endl;
-
     if (!oggInitialized) {
         std::cerr << "Ogg is not initialized." << std::endl;
         return false;
