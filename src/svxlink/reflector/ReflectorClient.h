@@ -437,15 +437,6 @@ class ReflectorClient
   private:
     std::vector<uint8_t> audioBuffer;
     std::mutex audioBufferMutex;
-    OpusDecoder* opusDecoder = nullptr;
-    SRC_STATE* srcState = nullptr;
-    int srcError = 0;
-    ogg_sync_state oy;
-    ogg_stream_state os;
-    bool oggInitialized = false;
-    const int opusSampleRate = 48000;
-    const int targetSampleRate = 16000;
-    const int channels = 1;
 
     using ClientIdRandomDist  = std::uniform_int_distribution<ClientId>;
     using ClientMap           = std::map<ClientId, ReflectorClient*>;
@@ -489,6 +480,16 @@ class ReflectorClient
     RxMap                       m_rx_map;
     TxMap                       m_tx_map;
     Json::Value                 m_node_info;
+
+    OpusDecoder* opusDecoder = nullptr;
+    SRC_STATE* srcState = nullptr;
+    int srcError = 0;
+    ogg_sync_state oy;
+    ogg_stream_state os;
+    bool oggInitialized = false;
+    const int opusSampleRate = 48000;
+    const int targetSampleRate = 16000;
+    const int channels = 1;
 
     static ClientId newClient(ReflectorClient* client);
 
