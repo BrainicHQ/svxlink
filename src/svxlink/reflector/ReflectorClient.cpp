@@ -407,6 +407,9 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
             if (audioFrameFloat.size() >= desiredFrameSize) {
                 return true; // Indicate that we have enough data for an audio frame
             }
+
+            // Display the current size of the output buffer
+            std::cout << "Current size of audio frame: " << audioFrameFloat.size() << std::endl;
         }
     }
 
