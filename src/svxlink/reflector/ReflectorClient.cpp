@@ -39,7 +39,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <vector>
 #include <mutex>
 #include <endian.h>
-
+#include <samplerate.h>
+#include <cstring>
+#include <opus.h>
 
 /****************************************************************************
  *
@@ -167,8 +169,32 @@ ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con
     m_udp_heartbeat_tx_cnt(UDP_HEARTBEAT_TX_CNT_RESET),
     m_udp_heartbeat_rx_cnt(UDP_HEARTBEAT_RX_CNT_RESET),
     m_reflector(ref), m_blocktime(0), m_remaining_blocktime(0),
-    m_current_tg(0)
+    m_current_tg(0), opusDecoder(nullptr), srcState(nullptr), srcError(0),
+    oggInitialized(false)
 {
+    // Initialize Opus decoder
+    int error;
+    opusDecoder = opus_decoder_create(opusSampleRate, channels, &error);
+    if (error != OPUS_OK) {
+        std::cerr << "Failed to create OPUS decoder: " << opus_strerror(error) << std::endl;
+        // Handle error appropriately
+    }
+
+    // Initialize libsamplerate resampler
+    srcState = src_new(SRC_SINC_FASTEST, channels, &srcError);
+    if (srcState == nullptr) {
+        std::cerr << "Failed to create libsamplerate resampler: " << src_strerror(srcError) << std::endl;
+        // Handle error appropriately
+    }
+
+    // Initialize Ogg sync and stream states
+    if (ogg_sync_init(&oy) == 0) {
+        oggInitialized = true;
+        ogg_stream_init(&os, 0);
+    } else {
+        std::cerr << "Failed to initialize Ogg sync state." << std::endl;
+    }
+
   m_con->setMaxFrameSize(ReflectorMsg::MAX_PREAUTH_FRAME_SIZE);
   m_con->frameReceived.connect(
       mem_fun(*this, &ReflectorClient::onFrameReceived));
@@ -210,6 +236,25 @@ ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con
 
 ReflectorClient::~ReflectorClient(void)
 {
+    // Cleanup for Opus decoder
+    if (opusDecoder) {
+        opus_decoder_destroy(opusDecoder);
+        opusDecoder = nullptr;
+    }
+
+    // Cleanup for libsamplerate resampler
+    if (srcState) {
+        src_delete(srcState);
+        srcState = nullptr;
+    }
+
+    // Cleanup for Ogg sync and stream states
+    if (oggInitialized) {
+        ogg_stream_clear(&os);
+        ogg_sync_clear(&oy);
+        oggInitialized = false;
+    }
+
   auto client_it = client_map.find(m_client_id);
   assert(client_it != client_map.end());
   client_map.erase(client_it);
@@ -275,26 +320,80 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
 
-void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
+void appendAudioData(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
-    audioBuffer.insert(audioBuffer.end(), data.begin(), data.end());
+    char* buffer = ogg_sync_buffer(&oy, data.size());
+    if (buffer != nullptr) {
+        memcpy(buffer, data.data(), data.size());
+        int result = ogg_sync_wrote(&oy, data.size());
+        if (result != 0) {
+            // Handle error: For example, log this condition or take corrective action
+            std::cerr << "Error appending data to Ogg sync state." << std::endl;
+        }
+    } else {
+        // Handle error: Failed to get buffer from ogg_sync_buffer
+        std::cerr << "Failed to allocate buffer in ogg_sync_state." << std::endl;
+    }
 }
 
-bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {
+bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
-    if (audioBuffer.size() < frameSize * 2) {
-        return false; // Not enough data
+
+    if (!oggInitialized) {
+        return false; // Ogg not initialized
     }
 
-    audioFrameFloat.reserve(frameSize);
-    for (size_t i = 0; i < frameSize * 2; i += 2) {
-        uint16_t be_sample = static_cast<uint16_t>((audioBuffer[i] << 8) | audioBuffer[i + 1]);
-        int16_t sample = static_cast<int16_t>(be16toh(be_sample)); // Convert from big-endian to host endianess
-        audioFrameFloat.push_back(sample / 32768.0f); // Normalize to [-1.0, 1.0] and convert to float
+    static std::vector<float> resampleBuffer; // Buffer to hold resampled audio data across calls
+    ogg_page page;
+
+    while (ogg_sync_pageout(&oy, &page) == 1) {
+        if (!ogg_stream_pagein(&os, &page)) {
+            ogg_packet packet;
+            while (ogg_stream_packetout(&os, &packet) == 1) {
+                // Decode with OPUS
+                // Assuming maximum Opus frame size for safety, adjust based on your specific needs
+                constexpr int maxFrameSize = 5760; // Max samples per channel for 120ms at 48000Hz
+                float pcm[maxFrameSize];
+                int frameCount = opus_decode_float(opusDecoder, packet.packet, packet.bytes, pcm, maxFrameSize, 0);
+                if (frameCount < 0) {
+                    std::cerr << "Failed to decode Opus packet: " << opus_strerror(frameCount) << std::endl;
+                    continue; // Skip this packet if there's an error
+                }
+
+                // Resample decoded PCM data
+                SRC_DATA srcData;
+                srcData.data_in = pcm;
+                srcData.input_frames = frameCount;
+                srcData.data_out = new float[frameCount * targetSampleRate / opusSampleRate + 512]; // Allocate more to avoid overflow
+                srcData.output_frames = frameCount * targetSampleRate / opusSampleRate + 512;
+                srcData.src_ratio = double(targetSampleRate) / opusSampleRate;
+
+                int resampleError = src_process(srcState, &srcData);
+                if (resampleError) {
+                    std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
+                    delete[] srcData.data_out; // Clean up allocated memory
+                    continue; // Skip this packet if there's a resampling error
+                }
+
+                // Append resampled data to the buffer
+                resampleBuffer.insert(resampleBuffer.end(), srcData.data_out, srcData.data_out + srcData.output_frames_gen);
+                delete[] srcData.data_out; // Clean up allocated memory
+
+                // Check if we have enough data for a frame
+                if (resampleBuffer.size() >= frameSize) {
+                    // Copy the required amount of data to audioFrameFloat
+                    audioFrameFloat.assign(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
+
+                    // Erase the data that was just copied from the buffer
+                    resampleBuffer.erase(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
+
+                    return true; // Successfully extracted a frame
+                }
+            }
+        }
     }
 
-    audioBuffer.erase(audioBuffer.begin(), audioBuffer.begin() + frameSize * 2);
-    return true;
+    return false; // No complete frame was extracted
 }
 
 

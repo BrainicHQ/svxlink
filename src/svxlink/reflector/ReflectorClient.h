@@ -431,8 +431,18 @@ class ReflectorClient
     const Json::Value& nodeInfo(void) const { return m_node_info; }
 
   private:
-    std::vector<uint8_t> audioBuffer; // Replaces ThreadSafeAudioBuffer
-    std::mutex audioBufferMutex; // Ensures thread safety for audioBuffer operations
+    std::vector<uint8_t> audioBuffer;
+    std::mutex audioBufferMutex;
+    OpusDecoder* opusDecoder = nullptr;
+    SRC_STATE* srcState = nullptr;
+    int srcError = 0;
+    ogg_sync_state oy; // Ogg sync state for buffering data
+    ogg_stream_state os; // Ogg stream state for packet-to-page conversion
+    bool oggInitialized = false;
+    const int opusSampleRate = 48000;
+    const int targetSampleRate = 16000;
+    const int channels = 1;
+
     using ClientIdRandomDist  = std::uniform_int_distribution<ClientId>;
     using ClientMap           = std::map<ClientId, ReflectorClient*>;
 
