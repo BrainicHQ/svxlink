@@ -1,41 +1,64 @@
-# Find the popt library
+# Existing find_package and setup commands
 find_package(Popt REQUIRED)
-set(LIBS ${LIBS} ${POPT_LIBRARIES})
-include_directories(${POPT_INCLUDE_DIRS})
-add_definitions(${POPT_DEFINITIONS})
+find_package(GCrypt REQUIRED)
+# Assuming pkg-config is available, otherwise, you'll need to find these packages manually
+find_package(PkgConfig REQUIRED)
 
-# ONNX Runtime
+pkg_check_modules(OPUS REQUIRED opus)
+pkg_check_modules(SAMPLERATE REQUIRED samplerate)
+pkg_check_modules(OGG REQUIRED ogg)
+
+# ONNX Runtime setup remains unchanged
 set(ONNXRUNTIME_ROOT_DIR "/home/silviu/onnxruntime")
-include_directories(${ONNXRUNTIME_ROOT_DIR}/include)
 find_library(ONNX_RUNTIME_LIB onnxruntime HINTS ${ONNXRUNTIME_ROOT_DIR}/lib)
 
 if(NOT ONNX_RUNTIME_LIB)
     message(FATAL_ERROR "ONNX Runtime library not found")
 endif()
 
-# Find the GCrypt library
-find_package(GCrypt REQUIRED)
-set(LIBS ${LIBS} ${GCRYPT_LIBRARIES})
-include_directories(${GCRYPT_INCLUDE_DIRS})
-add_definitions(${GCRYPT_DEFINITIONS})
+# Assuming jsoncpp setup remains unchanged
+pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 
-# Find jsoncpp library
-#find_package(jsoncpp REQUIRED)
-#get_target_property(JSONCPP_INC_PATH jsoncpp_lib INTERFACE_INCLUDE_DIRECTORIES)
-#include_directories(${JSONCPP_INC_PATH})
-#set(LIBS ${LIBS} jsoncpp_lib)
-pkg_check_modules (JSONCPP REQUIRED jsoncpp)
-include_directories(${JSONCPP_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${JSONCPP_LIBRARIES})
+# Include directories for all found packages
+include_directories(
+        ${POPT_INCLUDE_DIRS}
+        ${GCRYPT_INCLUDE_DIRS}
+        ${ONNXRUNTIME_ROOT_DIR}/include
+        ${JSONCPP_INCLUDE_DIRS}
+        ${OPUS_INCLUDE_DIRS}
+        ${SAMPLERATE_INCLUDE_DIRS}
+        ${OGG_INCLUDE_DIRS}
+)
 
-# Add project libraries
-set(LIBS asynccpp asyncaudio asynccore svxmisc ${LIBS})
+# Add definitions if any provided by the packages
+add_definitions(
+        ${POPT_DEFINITIONS}
+        ${GCRYPT_DEFINITIONS}
+)
+
+# Libraries to link against
+set(LIBS
+        ${LIBS}
+        ${POPT_LIBRARIES}
+        ${GCRYPT_LIBRARIES}
+        ${JSONCPP_LIBRARIES}
+        ${OPUS_LIBRARIES}
+        ${SAMPLERATE_LIBRARIES}
+        ${OGG_LIBRARIES}
+        asynccpp asyncaudio asynccore svxmisc
+        ${ONNX_RUNTIME_LIB}
+)
 
 # Build the executable
 add_executable(svxreflector
-        svxreflector.cpp Reflector.cpp ReflectorClient.cpp TGHandler.cpp
+        svxreflector.cpp
+        Reflector.cpp
+        ReflectorClient.cpp
+        TGHandler.cpp
 )
-target_link_libraries(svxreflector ${LIBS} ${ONNX_RUNTIME_LIB})
+
+target_link_libraries(svxreflector ${LIBS})
+
 set_target_properties(svxreflector PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
         INSTALL_RPATH "${ONNXRUNTIME_ROOT_DIR}/lib"

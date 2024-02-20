@@ -61,6 +61,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <mutex>
 #include <vector>
 
+#include <opus/opus.h>
+#include <samplerate.h>
+#include <ogg/ogg.h>
+
 
 /****************************************************************************
  *
