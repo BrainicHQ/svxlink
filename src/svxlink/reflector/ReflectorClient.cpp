@@ -349,7 +349,7 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     }
 }
 
-bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {
+bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t desiredFrameSize) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
     if (!oggInitialized) {
@@ -359,80 +359,56 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
 
     std::cout << "Starting to extract audio frame..." << std::endl;
 
-    static std::vector<float> resampleBuffer;
     ogg_page page;
-
-    // Debugging: Check if any pages are being extracted
-    int pageoutResult = ogg_sync_pageout(&oy, &page);
-    while (pageoutResult == 1) {
-        std::cout << "Extracted an Ogg page." << std::endl;
-        if (!ogg_stream_pagein(&os, &page)) {
-            std::cout << "Page added to Ogg stream." << std::endl;
-            ogg_packet packet;
-            while (ogg_stream_packetout(&os, &packet) == 1) {
-                std::cout << "Extracted an Ogg packet." << std::endl;
-
-                constexpr int maxFrameSize = 5760;
-                float pcm[maxFrameSize];
-                int frameCount = opus_decode_float(opusDecoder, packet.packet, packet.bytes, pcm, maxFrameSize, 0);
-                if (frameCount < 0) {
-                    std::cerr << "Failed to decode Opus packet: " << opus_strerror(frameCount) << std::endl;
-                    continue;
-                }
-
-                std::cout << "Decoded Opus packet, frame count: " << frameCount << std::endl;
-
-                int outputFrameEstimate = static_cast<int>(frameCount * (static_cast<double>(targetSampleRate) / opusSampleRate));
-                float* resampledOutput = new (std::nothrow) float[outputFrameEstimate + 256];
-                if (!resampledOutput) {
-                    std::cerr << "Failed to allocate memory for resampled output." << std::endl;
-                    continue;
-                }
-
-                SRC_DATA srcData;
-                srcData.data_in = pcm;
-                srcData.input_frames = frameCount;
-                srcData.data_out = resampledOutput;
-                srcData.output_frames = outputFrameEstimate + 256;
-                srcData.src_ratio = double(targetSampleRate) / opusSampleRate;
-
-                int resampleError = src_process(srcState, &srcData);
-                if (resampleError) {
-                    std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
-                    delete[] resampledOutput;
-                    continue;
-                }
-
-                std::cout << "Resampled audio, generated frames: " << srcData.output_frames_gen << std::endl;
-
-                resampleBuffer.insert(resampleBuffer.end(), resampledOutput, resampledOutput + srcData.output_frames_gen);
-                delete[] resampledOutput;
-
-                if (resampleBuffer.size() >= frameSize) {
-                    std::cout << "Sufficient data in resampleBuffer, size: " << resampleBuffer.size() << std::endl;
-                    audioFrameFloat.assign(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
-                    resampleBuffer.erase(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
-                    return true;
-                }
-            }
-        } else {
+    // Attempt to extract a page and decode packets
+    while (ogg_sync_pageout(&oy, &page) == 1) {
+        if (ogg_stream_pagein(&os, &page) != 0) {
             std::cerr << "Failed to add page to Ogg stream." << std::endl;
+            continue; // Attempt next page
         }
-        // Check again for the next page in the loop
-        pageoutResult = ogg_sync_pageout(&oy, &page);
+
+        ogg_packet packet;
+        while (ogg_stream_packetout(&os, &packet) == 1) {
+            // Decode Opus packet
+            float decodedPcm[5760]; // Maximum possible frame size
+            int numSamples = opus_decode_float(opusDecoder, packet.packet, packet.bytes, decodedPcm, 5760, 0);
+            if (numSamples < 0) {
+                std::cerr << "Failed to decode Opus packet: " << opus_strerror(numSamples) << std::endl;
+                continue; // Skip this packet
+            }
+
+            // Handle resampling if necessary (assuming SRC_DATA and resampling are correctly set up)
+            float resampledOutput[numSamples]; // Adjust this based on actual resampling output size
+            SRC_DATA srcData = {0};
+            srcData.data_in = decodedPcm;
+            srcData.input_frames = numSamples;
+            srcData.data_out = resampledOutput;
+            srcData.output_frames = sizeof(resampledOutput) / sizeof(float);
+            srcData.src_ratio = targetSampleRate / 48000.0; // Assuming 48 kHz is the internal sample rate
+
+            int resampleError = src_process(srcState, &srcData);
+            if (resampleError) {
+                std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
+                continue; // Skip this packet
+            }
+
+            // Append resampled audio to the output buffer, converting float to normalized float for Silero VAD
+            for (int i = 0; i < srcData.output_frames_gen; ++i) {
+                audioFrameFloat.push_back(resampledOutput[i]); // Directly use resampled float samples
+            }
+
+            // Check if we've accumulated enough data for processing
+            if (audioFrameFloat.size() >= desiredFrameSize) {
+                return true; // Indicate that we have enough data for an audio frame
+            }
+        }
     }
 
-    if (pageoutResult == 0) {
-        std::cout << "No Ogg page extracted, result: " << pageoutResult << ". Possibly need more data." << std::endl;
-    } else if (pageoutResult == -1) {
-        std::cout << "An error occurred during page extraction, result: " << pageoutResult << std::endl;
+    if (audioFrameFloat.size() < desiredFrameSize) {
+        std::cerr << "Not enough data in buffer. Current size: " << audioFrameFloat.size() << ", required: " << desiredFrameSize << std::endl;
     }
 
-    if (resampleBuffer.size() < frameSize) {
-        std::cerr << "Not enough data in resampleBuffer. Current size: " << resampleBuffer.size() << ", required: " << frameSize << std::endl;
-    }
-
-    return false;
+    return false; // Not enough samples were decoded or resampled to meet the desired frame size
 }
 
 
