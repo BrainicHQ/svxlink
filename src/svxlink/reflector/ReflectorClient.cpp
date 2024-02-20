@@ -368,7 +368,10 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
             continue; // Attempt next page
         }
 
+        std::cout << "Added page to Ogg stream." << std::endl;
+
         ogg_packet packet;
+        // check why this does not enter the loop!!!
         while (ogg_stream_packetout(&os, &packet) == 1) {
             // Decode Opus packet
             std::vector<float> decodedPcm(5760); // Adjust size dynamically if needed
