@@ -329,7 +329,7 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
 
     // Check if accumulated data is sufficient for extraction
-    if (accumulatedData.size() >= 512) { // Define a suitable minimum size based on your context
+    if (accumulatedData.size() >= 640) { // Define a suitable minimum size based on your context
         char* buffer = ogg_sync_buffer(&oy, accumulatedData.size());
         if (buffer != nullptr) {
             memcpy(buffer, accumulatedData.data(), accumulatedData.size());
