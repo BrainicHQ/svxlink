@@ -328,8 +328,11 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     // Accumulate data instead of immediately appending to Ogg sync
     accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
 
+    // Adjust the threshold to at least the minimum expected size of an Ogg page (4 kB)
+    const size_t minPageSize = 4096; // 4 kB
+
     // Check if accumulated data is sufficient for extraction
-    if (accumulatedData.size() >= 960) { // Define a suitable minimum size based on your context
+    if (accumulatedData.size() >= minPageSize) { // Define a suitable minimum size based on your context
         char* buffer = ogg_sync_buffer(&oy, accumulatedData.size());
         if (buffer != nullptr) {
             memcpy(buffer, accumulatedData.data(), accumulatedData.size());
@@ -371,7 +374,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         std::cout << "Added page to Ogg stream." << std::endl;
 
         ogg_packet packet;
-        // check why this does not enter the loop!!!
+
         while (ogg_stream_packetout(&os, &packet) == 1) {
             // Decode Opus packet
             std::vector<float> decodedPcm(5760); // Adjust size dynamically if needed
