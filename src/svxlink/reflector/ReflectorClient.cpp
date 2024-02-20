@@ -348,7 +348,9 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
     static std::vector<float> resampleBuffer;
     ogg_page page;
 
-    while (ogg_sync_pageout(&oy, &page) == 1) {
+    // Debugging: Check if any pages are being extracted
+    int pageoutResult = ogg_sync_pageout(&oy, &page);
+    while (pageoutResult == 1) {
         std::cout << "Extracted an Ogg page." << std::endl;
         if (!ogg_stream_pagein(&os, &page)) {
             std::cout << "Page added to Ogg stream." << std::endl;
@@ -402,12 +404,18 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         } else {
             std::cerr << "Failed to add page to Ogg stream." << std::endl;
         }
+        // Check again for the next page in the loop
+        pageoutResult = ogg_sync_pageout(&oy, &page);
+    }
+
+    if (pageoutResult == 0) {
+        std::cout << "No Ogg page extracted, result: " << pageoutResult << ". Possibly need more data." << std::endl;
+    } else if (pageoutResult == -1) {
+        std::cout << "An error occurred during page extraction, result: " << pageoutResult << std::endl;
     }
 
     if (resampleBuffer.size() < frameSize) {
         std::cerr << "Not enough data in resampleBuffer. Current size: " << resampleBuffer.size() << ", required: " << frameSize << std::endl;
-    } else {
-        std::cout << "Exiting with resampleBuffer size: " << resampleBuffer.size() << std::endl;
     }
 
     return false;
