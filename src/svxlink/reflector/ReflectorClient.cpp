@@ -338,6 +338,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
     if (!oggInitialized) {
+        std::cerr << "Ogg is not initialized." << std::endl;
         return false;
     }
 
@@ -357,22 +358,30 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
                     continue;
                 }
 
+                // Calculate the required output buffer size more accurately
+                int outputFrameEstimate = static_cast<int>(frameCount * (static_cast<double>(targetSampleRate) / opusSampleRate));
+                float* resampledOutput = new (std::nothrow) float[outputFrameEstimate + 256]; // Using nothrow to safely handle allocation failure
+                if (!resampledOutput) {
+                    std::cerr << "Failed to allocate memory for resampled output." << std::endl;
+                    continue; // Skip this packet if memory allocation fails
+                }
+
                 SRC_DATA srcData;
                 srcData.data_in = pcm;
                 srcData.input_frames = frameCount;
-                srcData.data_out = new float[frameCount * targetSampleRate / opusSampleRate + 512];
-                srcData.output_frames = frameCount * targetSampleRate / opusSampleRate + 512;
+                srcData.data_out = resampledOutput;
+                srcData.output_frames = outputFrameEstimate + 256;
                 srcData.src_ratio = double(targetSampleRate) / opusSampleRate;
 
                 int resampleError = src_process(srcState, &srcData);
                 if (resampleError) {
                     std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
-                    delete[] srcData.data_out;
+                    delete[] resampledOutput;
                     continue;
                 }
 
-                resampleBuffer.insert(resampleBuffer.end(), srcData.data_out, srcData.data_out + srcData.output_frames_gen);
-                delete[] srcData.data_out;
+                resampleBuffer.insert(resampleBuffer.end(), resampledOutput, resampledOutput + srcData.output_frames_gen);
+                delete[] resampledOutput;
 
                 if (resampleBuffer.size() >= frameSize) {
                     audioFrameFloat.assign(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
@@ -381,6 +390,11 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
                 }
             }
         }
+    }
+
+    // Optionally, log if exiting because the buffer doesn't have enough data
+    if (resampleBuffer.size() < frameSize) {
+        std::cerr << "Not enough data in resampleBuffer. Current size: " << resampleBuffer.size() << ", required: " << frameSize << std::endl;
     }
 
     return false;
