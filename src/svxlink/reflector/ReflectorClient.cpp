@@ -329,7 +329,7 @@ void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
 
     // Check if accumulated data is sufficient for extraction
-    if (accumulatedData.size() >= 640) { // Define a suitable minimum size based on your context
+    if (accumulatedData.size() >= 960) { // Define a suitable minimum size based on your context
         char* buffer = ogg_sync_buffer(&oy, accumulatedData.size());
         if (buffer != nullptr) {
             memcpy(buffer, accumulatedData.data(), accumulatedData.size());
@@ -353,7 +353,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
     // audioFrameFloat size
-    std::cout << "audioFrameFloat size: " << audioFrameFloat.size() << std::endl;
+    std::cout << "extractAudioFrame: audioFrameFloat size: " << audioFrameFloat.size() << std::endl;
 
     if (!oggInitialized) {
         std::cerr << "Ogg is not initialized." << std::endl;
