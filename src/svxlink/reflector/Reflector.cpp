@@ -525,6 +525,9 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       // Prepare input tensor from audioFrameFloat for Silero VAD
                       bool voiceDetected = processAudioWithSilero(audioFrameFloat);
 
+                      std::cout << "VAD Model Output: Voice Probability = " << lastVoiceProbability
+                                << " (Threshold = " << threshold << ")" << std::endl;
+
                       if (voiceDetected) // Voice detected
                       {
                           std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
