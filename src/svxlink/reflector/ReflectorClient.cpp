@@ -320,16 +320,17 @@ void ReflectorClient::setBlock(unsigned blocktime)
 
 void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
+    std::cout << "Appending audio data, size: " << data.size() << std::endl;
     char* buffer = ogg_sync_buffer(&oy, data.size());
     if (buffer != nullptr) {
         memcpy(buffer, data.data(), data.size());
         int result = ogg_sync_wrote(&oy, data.size());
-        if (result != 0) {
-            // Handle error: For example, log this condition or take corrective action
-            std::cerr << "Error appending data to Ogg sync state." << std::endl;
+        if (result == 0) {
+            std::cout << "Successfully appended data to Ogg sync state." << std::endl;
+        } else {
+            std::cerr << "Error appending data to Ogg sync state, result: " << result << std::endl;
         }
     } else {
-        // Handle error: Failed to get buffer from ogg_sync_buffer
         std::cerr << "Failed to allocate buffer in ogg_sync_state." << std::endl;
     }
 }
