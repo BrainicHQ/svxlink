@@ -370,32 +370,34 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         ogg_packet packet;
         while (ogg_stream_packetout(&os, &packet) == 1) {
             // Decode Opus packet
-            float decodedPcm[5760]; // Maximum possible frame size
-            int numSamples = opus_decode_float(opusDecoder, packet.packet, packet.bytes, decodedPcm, 5760, 0);
-            if (numSamples < 0) {
+            std::vector<float> decodedPcm(5760); // Adjust size dynamically if needed
+            int numSamples = opus_decode_float(opusDecoder, packet.packet, packet.bytes, decodedPcm.data(), decodedPcm.size(), 0);
+            if (numSamples <= 0) {
                 std::cerr << "Failed to decode Opus packet: " << opus_strerror(numSamples) << std::endl;
-                continue; // Skip this packet
+                continue; // Skip this packet if decoding fails
             }
 
-            // Handle resampling if necessary (assuming SRC_DATA and resampling are correctly set up)
-            float resampledOutput[numSamples]; // Adjust this based on actual resampling output size
-            SRC_DATA srcData = {0};
-            srcData.data_in = decodedPcm;
+            // Prepare for resampling
+            std::vector<float> resampledOutput(numSamples); // Pre-allocate with expected size
+            SRC_DATA srcData;
+            memset(&srcData, 0, sizeof(SRC_DATA));
+            srcData.data_in = decodedPcm.data();
             srcData.input_frames = numSamples;
-            srcData.data_out = resampledOutput;
-            srcData.output_frames = sizeof(resampledOutput) / sizeof(float);
-            srcData.src_ratio = targetSampleRate / 48000.0; // Assuming 48 kHz is the internal sample rate
+            srcData.data_out = resampledOutput.data();
+            srcData.output_frames = resampledOutput.size();
+            srcData.src_ratio = static_cast<double>(targetSampleRate) / INTERNAL_SAMPLE_RATE;
 
             int resampleError = src_process(srcState, &srcData);
             if (resampleError) {
                 std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
-                continue; // Skip this packet
+                continue; // Skip this packet if resampling fails
             }
 
-            // Append resampled audio to the output buffer, converting float to normalized float for Silero VAD
-            for (int i = 0; i < srcData.output_frames_gen; ++i) {
-                audioFrameFloat.push_back(resampledOutput[i]); // Directly use resampled float samples
-            }
+            // Adjust the size of the resampled output vector to match the generated frame count
+            resampledOutput.resize(srcData.output_frames_gen);
+
+            // Append resampled audio to the output buffer
+            audioFrameFloat.insert(audioFrameFloat.end(), resampledOutput.begin(), resampledOutput.end());
 
             // Check if we've accumulated enough data for processing
             if (audioFrameFloat.size() >= desiredFrameSize) {
