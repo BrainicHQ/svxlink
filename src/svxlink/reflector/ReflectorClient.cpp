@@ -158,19 +158,17 @@ bool ReflectorClient::TgFilter::operator()(ReflectorClient* client) const
 
 ReflectorClient::ReflectorClient(Reflector *ref, Async::FramedTcpConnection *con,
                                  Async::Config *cfg)
-        : m_con(con), m_con_state(STATE_EXPECT_PROTO_VER),
-          m_disc_timer(10000, Timer::TYPE_ONESHOT, false),
-          m_client_id(newClient(this)), m_remote_udp_port(0), m_cfg(cfg),
-          m_next_udp_tx_seq(0), m_next_udp_rx_seq(0),
-          m_heartbeat_timer(1000, Timer::TYPE_PERIODIC),
-          m_heartbeat_tx_cnt(HEARTBEAT_TX_CNT_RESET),
-          m_heartbeat_rx_cnt(HEARTBEAT_RX_CNT_RESET),
-          m_udp_heartbeat_tx_cnt(UDP_HEARTBEAT_TX_CNT_RESET),
-          m_udp_heartbeat_rx_cnt(UDP_HEARTBEAT_RX_CNT_RESET),
-          m_reflector(ref), m_blocktime(0), opusDecoder(nullptr),
-          m_remaining_blocktime(0),
-          m_current_tg(0),
-          opusDecoder(nullptr), srcState(nullptr), srcError(0), oggInitialized(false)
+  : m_con(con), m_con_state(STATE_EXPECT_PROTO_VER),
+    m_disc_timer(10000, Timer::TYPE_ONESHOT, false),
+    m_client_id(newClient(this)), m_remote_udp_port(0), m_cfg(cfg),
+    m_next_udp_tx_seq(0), m_next_udp_rx_seq(0),
+    m_heartbeat_timer(1000, Timer::TYPE_PERIODIC),
+    m_heartbeat_tx_cnt(HEARTBEAT_TX_CNT_RESET),
+    m_heartbeat_rx_cnt(HEARTBEAT_RX_CNT_RESET),
+    m_udp_heartbeat_tx_cnt(UDP_HEARTBEAT_TX_CNT_RESET),
+    m_udp_heartbeat_rx_cnt(UDP_HEARTBEAT_RX_CNT_RESET),
+    m_reflector(ref), m_blocktime(0), m_remaining_blocktime(0),
+    m_current_tg(0), srcState(nullptr), srcError(0), oggInitialized(false)
 {
     // Initialize Opus decoder
     int error;
