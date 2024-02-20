@@ -319,7 +319,7 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
 
-void appendAudioData(const std::vector<uint8_t>& data) {
+void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
     char* buffer = ogg_sync_buffer(&oy, data.size());
     if (buffer != nullptr) {
@@ -335,65 +335,58 @@ void appendAudioData(const std::vector<uint8_t>& data) {
     }
 }
 
-bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat) {
+bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
 
     if (!oggInitialized) {
-        return false; // Ogg not initialized
+        return false;
     }
 
-    static std::vector<float> resampleBuffer; // Buffer to hold resampled audio data across calls
+    static std::vector<float> resampleBuffer;
     ogg_page page;
 
     while (ogg_sync_pageout(&oy, &page) == 1) {
         if (!ogg_stream_pagein(&os, &page)) {
             ogg_packet packet;
             while (ogg_stream_packetout(&os, &packet) == 1) {
-                // Decode with OPUS
-                // Assuming maximum Opus frame size for safety, adjust based on your specific needs
-                constexpr int maxFrameSize = 5760; // Max samples per channel for 120ms at 48000Hz
+
+                constexpr int maxFrameSize = 5760;
                 float pcm[maxFrameSize];
                 int frameCount = opus_decode_float(opusDecoder, packet.packet, packet.bytes, pcm, maxFrameSize, 0);
                 if (frameCount < 0) {
                     std::cerr << "Failed to decode Opus packet: " << opus_strerror(frameCount) << std::endl;
-                    continue; // Skip this packet if there's an error
+                    continue;
                 }
 
-                // Resample decoded PCM data
                 SRC_DATA srcData;
                 srcData.data_in = pcm;
                 srcData.input_frames = frameCount;
-                srcData.data_out = new float[frameCount * targetSampleRate / opusSampleRate + 512]; // Allocate more to avoid overflow
+                srcData.data_out = new float[frameCount * targetSampleRate / opusSampleRate + 512];
                 srcData.output_frames = frameCount * targetSampleRate / opusSampleRate + 512;
                 srcData.src_ratio = double(targetSampleRate) / opusSampleRate;
 
                 int resampleError = src_process(srcState, &srcData);
                 if (resampleError) {
                     std::cerr << "Resampling error: " << src_strerror(resampleError) << std::endl;
-                    delete[] srcData.data_out; // Clean up allocated memory
-                    continue; // Skip this packet if there's a resampling error
+                    delete[] srcData.data_out;
+                    continue;
                 }
 
-                // Append resampled data to the buffer
                 resampleBuffer.insert(resampleBuffer.end(), srcData.data_out, srcData.data_out + srcData.output_frames_gen);
-                delete[] srcData.data_out; // Clean up allocated memory
+                delete[] srcData.data_out;
 
-                // Check if we have enough data for a frame
                 if (resampleBuffer.size() >= frameSize) {
-                    // Copy the required amount of data to audioFrameFloat
                     audioFrameFloat.assign(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
-
-                    // Erase the data that was just copied from the buffer
                     resampleBuffer.erase(resampleBuffer.begin(), resampleBuffer.begin() + frameSize);
-
-                    return true; // Successfully extracted a frame
+                    return true;
                 }
             }
         }
     }
 
-    return false; // No complete frame was extracted
+    return false;
 }
+
 
 
 /****************************************************************************
