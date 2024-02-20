@@ -511,6 +511,8 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   return;
               }
 
+              std::cout << "Received audio data from " << client->callsign() << std::endl;
+
               uint32_t tg = TGHandler::instance()->TGForClient(client);
               if (!msg.audioData().empty() && (tg > 0))
               {
