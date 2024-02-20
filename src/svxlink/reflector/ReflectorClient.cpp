@@ -357,6 +357,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         return false;
     }
 
+    audioFrameFloat.clear();
     std::cout << "Starting to extract audio frame..." << std::endl;
 
     ogg_page page;
