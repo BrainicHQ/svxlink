@@ -357,7 +357,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
         return false;
     }
 
-    audioFrameFloat.clear();
+    //audioFrameFloat.clear();
     std::cout << "Starting to extract audio frame..." << std::endl;
 
     ogg_page page;
@@ -386,7 +386,7 @@ bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, siz
             srcData.input_frames = numSamples;
             srcData.data_out = resampledOutput.data();
             srcData.output_frames = resampledOutput.size();
-            srcData.src_ratio = static_cast<double>(targetSampleRate) / INTERNAL_SAMPLE_RATE;
+            srcData.src_ratio = static_cast<double>(targetSampleRate) / static_cast<double>(opusSampleRate);
 
             int resampleError = src_process(srcState, &srcData);
             if (resampleError) {
