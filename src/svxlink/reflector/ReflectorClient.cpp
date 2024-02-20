@@ -318,20 +318,34 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
 
+// Member variable in ReflectorClient class to accumulate data
+std::vector<uint8_t> accumulatedData;
+
 void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
     std::cout << "Appending audio data, size: " << data.size() << std::endl;
-    char* buffer = ogg_sync_buffer(&oy, data.size());
-    if (buffer != nullptr) {
-        memcpy(buffer, data.data(), data.size());
-        int result = ogg_sync_wrote(&oy, data.size());
-        if (result == 0) {
-            std::cout << "Successfully appended data to Ogg sync state." << std::endl;
+
+    // Accumulate data instead of immediately appending to Ogg sync
+    accumulatedData.insert(accumulatedData.end(), data.begin(), data.end());
+
+    // Check if accumulated data is sufficient for extraction
+    if (accumulatedData.size() >= 512) { // Define a suitable minimum size based on your context
+        char* buffer = ogg_sync_buffer(&oy, accumulatedData.size());
+        if (buffer != nullptr) {
+            memcpy(buffer, accumulatedData.data(), accumulatedData.size());
+            int result = ogg_sync_wrote(&oy, accumulatedData.size());
+            if (result == 0) {
+                std::cout << "Successfully appended data to Ogg sync state." << std::endl;
+            } else {
+                std::cerr << "Error appending data to Ogg sync state, result: " << result << std::endl;
+            }
+            // Clear accumulated data after successful append
+            accumulatedData.clear();
         } else {
-            std::cerr << "Error appending data to Ogg sync state, result: " << result << std::endl;
+            std::cerr << "Failed to allocate buffer in ogg_sync_state." << std::endl;
         }
     } else {
-        std::cerr << "Failed to allocate buffer in ogg_sync_state." << std::endl;
+        std::cout << "Accumulating data, total size: " << accumulatedData.size() << std::endl;
     }
 }
 
