@@ -436,24 +436,25 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
 }
 
 std::string writeAudioDataToFile(const std::vector<unsigned char>& audioData) {
-    std::string tempFilePath = "/tmp/temp_audio_data.bin"; // Adjust the path as necessary
+    std::string tempFilePath = "/tmp/temp_audio_data.bin"; // Ensure this directory is writable
     std::ofstream outFile(tempFilePath, std::ios::out | std::ios::binary);
     if (!outFile) {
         std::cerr << "Failed to create temporary file for audio data at " << tempFilePath << std::endl;
-        // For debugging: Attempt to print out the reason
         perror("Error");
         return "";
     }
 
-    outFile.write(reinterpret_cast<const char*>(audioData.data()), audioData.size());
+    if (!audioData.empty()) {
+        outFile.write(reinterpret_cast<const char*>(audioData.data()), audioData.size());
+    } else {
+        std::cerr << "Warning: Attempted to write empty audio data to file." << std::endl;
+    }
     outFile.close();
 
     return tempFilePath;
 }
 
-// Function to detect format and compression of audio data using ffprobe
 void detectAudioDataFormat(const std::string& filePath) {
-    // Command includes redirection of stderr to stdout to capture all output
     std::string command = "ffprobe -v error -show_entries format=format_name,stream=codec_name -of default=noprint_wrappers=1 \"" + filePath + "\" 2>&1";
     std::array<char, 128> buffer;
     std::string result;
@@ -465,10 +466,12 @@ void detectAudioDataFormat(const std::string& filePath) {
         result += buffer.data();
     }
     
-    // Output the captured ffprobe result
-    std::cout << "ffprobe output:\n" << result << std::endl;
+    if (!result.empty()) {
+        std::cout << "ffprobe output:\n" << result << std::endl;
+    } else {
+        std::cout << "ffprobe did not return any output for the file: " << filePath << std::endl;
+    }
 
-    // After processing, you might want to remove the temporary file
     std::remove(filePath.c_str());
 }
 
