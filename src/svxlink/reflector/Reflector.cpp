@@ -453,13 +453,20 @@ std::string writeAudioDataToFile(const std::vector<unsigned char>& audioData) {
 
 // Function to detect format and compression of audio data using ffprobe
 void detectAudioDataFormat(const std::string& filePath) {
-    std::string command = "ffprobe -v error -show_entries format=format_name,stream=codec_name -of default=noprint_wrappers=1 " + filePath;
-    // Using std::system to execute ffprobe command, ideally you should capture the output
-    // This is just a simple example, consider using a more secure approach for execution and capturing output
-    int result = std::system(command.c_str());
-    if (result != 0) {
-        std::cerr << "ffprobe command failed" << std::endl;
+    // Command includes redirection of stderr to stdout to capture all output
+    std::string command = "ffprobe -v error -show_entries format=format_name,stream=codec_name -of default=noprint_wrappers=1 \"" + filePath + "\" 2>&1";
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
     }
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    
+    // Output the captured ffprobe result
+    std::cout << "ffprobe output:\n" << result << std::endl;
 
     // After processing, you might want to remove the temporary file
     std::remove(filePath.c_str());
