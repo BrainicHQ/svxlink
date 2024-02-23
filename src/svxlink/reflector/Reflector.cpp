@@ -38,6 +38,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <sstream>
 #include <algorithm>
 #include <fstream>
+#include <cstdlib>
 
 /****************************************************************************
  *
@@ -434,38 +435,33 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     return voiceDetected;
 }
 
-// Simple enum to represent detected audio formats
-enum class AudioFormat {
-    Unknown,
-    MP3,
-    WAV,
-    OGG,
-    RAW_PCM // Assuming raw PCM if no header matches
-};
+// Function to write audio data to a temporary file
+std::string writeAudioDataToFile(const std::vector<char>& audioData) {
+    std::string tempFilePath = "temp_audio_data.bin";
+    std::ofstream outFile(tempFilePath, std::ios::out | std::ios::binary);
+    if (!outFile) {
+        std::cerr << "Failed to create temporary file for audio data" << std::endl;
+        return "";
+    }
 
-// Simple method to detect audio data format based on signatures
-AudioFormat detectAudioFormat(const std::vector<uint8_t>& audioData) {
-    // Check if the data vector is too short for any detection
-    if (audioData.size() < 4) return AudioFormat::Unknown;
+    outFile.write(audioData.data(), audioData.size());
+    outFile.close();
 
-    // Convert the first 4 bytes to a string for easy comparison
-    std::string header(reinterpret_cast<const char*>(audioData.data()), 4);
+    return tempFilePath;
+}
 
-    // Check for MP3 header (simplified, real MP3 headers are more complex)
-    if (header.substr(0, 2) == "ID3" || (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0))
-        return AudioFormat::MP3;
+// Function to detect format and compression of audio data using ffprobe
+void detectAudioDataFormat(const std::string& filePath) {
+    std::string command = "ffprobe -v error -show_entries format=format_name,stream=codec_name -of default=noprint_wrappers=1 " + filePath;
+    // Using std::system to execute ffprobe command, ideally you should capture the output
+    // This is just a simple example, consider using a more secure approach for execution and capturing output
+    int result = std::system(command.c_str());
+    if (result != 0) {
+        std::cerr << "ffprobe command failed" << std::endl;
+    }
 
-    // Check for WAV header
-    if (header == "RIFF")
-        return AudioFormat::WAV;
-
-    // Check for OGG header
-    if (header == "OggS")
-        return AudioFormat::OGG;
-
-    // Assuming raw PCM if no known headers are found
-    // Note: This is a very optimistic guess, as raw PCM data doesn't have a universal signature
-    return AudioFormat::RAW_PCM;
+    // After processing, you might want to remove the temporary file
+    std::remove(filePath.c_str());
 }
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
@@ -545,8 +541,14 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   return;
               }
 
-              //detect the format and compression of msg.audioData()
-                AudioFormat format = detectAudioFormat(msg.audioData());
+               //detect the format and compression of msg.audioData() using ffprobe
+                 std::string tempFilePath = writeAudioDataToFile(audioData);
+                  if (!tempFilePath.empty()) {
+                  // Detect format and compression
+                  detectAudioDataFormat(tempFilePath);
+                  }
+          
+              
 
     switch (format) {
         case AudioFormat::MP3:
