@@ -434,6 +434,40 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     return voiceDetected;
 }
 
+// Simple enum to represent detected audio formats
+enum class AudioFormat {
+    Unknown,
+    MP3,
+    WAV,
+    OGG,
+    RAW_PCM // Assuming raw PCM if no header matches
+};
+
+// Simple method to detect audio data format based on signatures
+AudioFormat detectAudioFormat(const std::vector<uint8_t>& audioData) {
+    // Check if the data vector is too short for any detection
+    if (audioData.size() < 4) return AudioFormat::Unknown;
+
+    // Convert the first 4 bytes to a string for easy comparison
+    std::string header(reinterpret_cast<const char*>(audioData.data()), 4);
+
+    // Check for MP3 header (simplified, real MP3 headers are more complex)
+    if (header.substr(0, 2) == "ID3" || (header[0] == 0xFF && (header[1] & 0xE0) == 0xE0))
+        return AudioFormat::MP3;
+
+    // Check for WAV header
+    if (header == "RIFF")
+        return AudioFormat::WAV;
+
+    // Check for OGG header
+    if (header == "OggS")
+        return AudioFormat::OGG;
+
+    // Assuming raw PCM if no known headers are found
+    // Note: This is a very optimistic guess, as raw PCM data doesn't have a universal signature
+    return AudioFormat::RAW_PCM;
+}
+
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
 {
@@ -510,6 +544,27 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   std::cerr << "*** WARNING[" << client->callsign() << "]: Could not unpack incoming MsgUdpAudioV1 message" << std::endl;
                   return;
               }
+
+              //detect the format and compression of msg.audioData()
+                AudioFormat format = detectAudioFormat(audioData);
+
+    switch (format) {
+        case AudioFormat::MP3:
+            std::cout << "Detected MP3 format.\n";
+            break;
+        case AudioFormat::WAV:
+            std::cout << "Detected WAV format.\n";
+            break;
+        case AudioFormat::OGG:
+            std::cout << "Detected OGG format.\n";
+            break;
+        case AudioFormat::RAW_PCM:
+            std::cout << "Assuming RAW PCM format.\n";
+            break;
+        default:
+            std::cout << "Unknown audio format.\n";
+    }
+
 
               std::cout << "Received audio data from " << client->callsign() << std::endl;
 
