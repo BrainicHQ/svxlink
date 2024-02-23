@@ -546,7 +546,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               }
 
               //detect the format and compression of msg.audioData()
-                AudioFormat format = detectAudioFormat(audioData);
+                AudioFormat format = detectAudioFormat(msg.audioData());
 
     switch (format) {
         case AudioFormat::MP3:
