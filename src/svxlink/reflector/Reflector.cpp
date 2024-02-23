@@ -542,7 +542,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               }
 
                //detect the format and compression of msg.audioData() using ffprobe
-                 std::string tempFilePath = writeAudioDataToFile(audioData);
+                 std::string tempFilePath = writeAudioDataToFile(msg.audioData());
                   if (!tempFilePath.empty()) {
                   // Detect format and compression
                   detectAudioDataFormat(tempFilePath);
