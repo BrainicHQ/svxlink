@@ -436,7 +436,7 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
 }
 
 // Function to write audio data to a temporary file
-std::string writeAudioDataToFile(const std::vector<char>& audioData) {
+std::string writeAudioDataToFile(const std::vector<unsigned char>& audioData) {
     std::string tempFilePath = "temp_audio_data.bin";
     std::ofstream outFile(tempFilePath, std::ios::out | std::ios::binary);
     if (!outFile) {
@@ -444,7 +444,7 @@ std::string writeAudioDataToFile(const std::vector<char>& audioData) {
         return "";
     }
 
-    outFile.write(audioData.data(), audioData.size());
+    outFile.write(reinterpret_cast<const char*>(audioData.data()), audioData.size());
     outFile.close();
 
     return tempFilePath;
