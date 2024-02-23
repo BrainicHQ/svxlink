@@ -548,26 +548,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   detectAudioDataFormat(tempFilePath);
                   }
           
-              
-
-    switch (format) {
-        case AudioFormat::MP3:
-            std::cout << "Detected MP3 format.\n";
-            break;
-        case AudioFormat::WAV:
-            std::cout << "Detected WAV format.\n";
-            break;
-        case AudioFormat::OGG:
-            std::cout << "Detected OGG format.\n";
-            break;
-        case AudioFormat::RAW_PCM:
-            std::cout << "Assuming RAW PCM format.\n";
-            break;
-        default:
-            std::cout << "Unknown audio format.\n";
-    }
-
-
               std::cout << "Received audio data from " << client->callsign() << std::endl;
 
               uint32_t tg = TGHandler::instance()->TGForClient(client);
