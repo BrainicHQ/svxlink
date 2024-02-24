@@ -188,7 +188,8 @@ class Reflector : public sigc::trackable
     std::vector<const char*> inputNodeNames = {"input", "sr", "h", "c"};
     std::vector<const char*> outputNodeNames = {"output", "hn", "cn"};
     std::vector<float> _h, _c; // Hidden and cell states
-    float threshold; // VAD threshold
+    float threshold = 0.5; // Threshold for voice probability
+    float dynamicThreshold = 0.5; // Initialized to match threshold, adjusted dynamically
     std::vector<float>::size_type window_size_samples = 512; // Assuming a fixed window size
     size_t frameSize = 512;
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
@@ -199,6 +200,8 @@ class Reflector : public sigc::trackable
 
     float minVoiceDuration = 0.2; // Minimum duration in seconds to consider as valid speech
     float accumulatedVoiceTime = 0.0; // Accumulated duration of detected voice
+    float bufferPeriod = 0.3; // Buffer period in seconds to allow brief pauses
+    float bufferTime = 0.0; // Time to track buffer period
 
     // Private methods for Silero VAD
     void initializeSileroVAD(const std::string& modelPath);

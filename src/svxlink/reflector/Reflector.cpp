@@ -381,7 +381,7 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
 
 bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     if (audioFrame.size() != window_size_samples) {
-        std::cerr << "Audio frame size does not match expected window size: " << window_size_samples << std::endl;
+        std::cerr << "Audio frame size does not match expected window size: " << window_size_samples << " samples." << std::endl;
         return false;
     }
 
@@ -424,17 +424,29 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
     lastFrameSize = audioFrame.size();
     lastMaxAmplitude = *std::max_element(audioFrame.begin(), audioFrame.end());
 
-    // Handling for anti-keychunking
+    // Implement dynamic threshold adjustment and buffer for speech end detection
+    dynamicThreshold = std::min(threshold, std::max(dynamicThreshold, lastVoiceProbability - 0.1f));
+
     if (voiceDetected) {
         accumulatedVoiceTime += static_cast<float>(window_size_samples) / sr[0];
-        if (accumulatedVoiceTime >= minVoiceDuration) {
-            return true; // Only return true if the accumulated voice time exceeds the minimum
-        }
+        bufferTime = 0.0; // Reset buffer time if voice is detected
     } else {
-        accumulatedVoiceTime = 0.0; // Reset if no voice detected
+        if (bufferTime < bufferPeriod) {
+            bufferTime += static_cast<float>(window_size_samples) / sr[0];
+            // Only consider extending voice detection during the buffer period if accumulated voice time is significant
+            if (accumulatedVoiceTime >= minVoiceDuration) {
+                return true;
+            }
+        }
+        // Reset accumulated voice time if no voice detected beyond the buffer period
+        accumulatedVoiceTime = 0.0;
     }
 
-    return false; // Default to false unless conditions are met
+    // Reset dynamic threshold if no voice is detected beyond the buffer period
+    dynamicThreshold = threshold;
+
+    // Return true if accumulated voice time meets or exceeds minimum voice duration
+    return accumulatedVoiceTime >= minVoiceDuration;
 }
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
