@@ -190,8 +190,8 @@ class Reflector : public sigc::trackable
     std::vector<float> _h, _c; // Hidden and cell states
     float threshold = 0.5; // Threshold for voice probability
     float dynamicThreshold = 0.5; // Initialized to match threshold, adjusted dynamically
-    std::vector<float>::size_type window_size_samples = 512; // Assuming a fixed window size
-    size_t frameSize = 512;
+    std::vector<float>::size_type window_size_samples = 1024; // Assuming a fixed window size
+    size_t frameSize = 1024;
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
 
     float lastVoiceProbability = 0.0f; // Store the last voice probability
