@@ -487,8 +487,6 @@ class ReflectorClient
     ogg_sync_state oy;
     ogg_stream_state os;
     bool oggInitialized = false;
-    const int opusSampleRate = 48000;
-    const int targetSampleRate = 16000;
     const int channels = 1;
 
     static ClientId newClient(ReflectorClient* client);

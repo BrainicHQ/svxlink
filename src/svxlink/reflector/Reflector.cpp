@@ -386,9 +386,6 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
         return false;
     }
 
-    // Assuming sr is a class member of type std::vector<int64_t> initialized elsewhere
-    sr = {16000}; // This line might be redundant if sr is always 16000 and initialized in the constructor
-
     // Create MemoryInfo object for tensor creation
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
@@ -518,7 +515,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               if (!msg.audioData().empty() && (tg > 0))
               {
                   std::cout << client->callsign() << ": Received audio data for TG #" << tg << std::endl;
-                  client->appendAudioData(msg);
+                  client->appendAudioData(msg.audioData());
 
                   std::vector<float> audioFrameFloat;
 
