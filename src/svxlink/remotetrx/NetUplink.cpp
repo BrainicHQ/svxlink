@@ -648,7 +648,7 @@ void NetUplink::handleMsg(Msg *msg)
     
     case MsgAudio::TYPE:
     {
-      //cout << "NetUplink [MsgAudio]\n";
+      cout << "NetUplink [MsgAudio]\n";
       if (!tx_muted && (audio_dec != 0))
       {
         MsgAudio *audio_msg = reinterpret_cast<MsgAudio*>(msg);
@@ -774,7 +774,7 @@ void NetUplink::selcallSequenceDetected(std::string sequence)
 
 void NetUplink::writeEncodedSamples(const void *buf, int size)
 {
-  //cout << "NetUplink::writeEncodedSamples: size=" << size << endl;
+  cout << "NetUplink::writeEncodedSamples: size=" << size << endl;
   const char *ptr = reinterpret_cast<const char *>(buf);
   while (size > 0)
   {
