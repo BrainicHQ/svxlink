@@ -380,30 +380,27 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
 } /* Reflector::clientDisconnected */
 
 bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
-    // Ensure the input vector is correctly sized
     if (audioFrame.size() != window_size_samples) {
-        std::cerr << "Audio frame size does not match expected window size." << std::endl;
+        std::cerr << "Audio frame size does not match expected window size: " << window_size_samples << std::endl;
         return false;
     }
 
-    // Create MemoryInfo object for tensor creation
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-
     std::vector<int64_t> audioInputTensorShape = {1, static_cast<int64_t>(audioFrame.size())};
     Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(
             memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(),
             audioInputTensorShape.data(), audioInputTensorShape.size());
 
-    // Prepare the sample rate tensor
     std::vector<int64_t> srTensorShape = {1};
-    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(memory_info, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
+    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(
+            memory_info, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
 
-    // Prepare the hidden and cell state tensors
-    std::vector<int64_t> hcTensorShape = {2, 1, 64}; // Adjust the shape based on your model's requirements
-    Ort::Value hTensor = Ort::Value::CreateTensor<float>(memory_info, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
-    Ort::Value cTensor = Ort::Value::CreateTensor<float>(memory_info, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
+    std::vector<int64_t> hcTensorShape = {2, 1, 64};
+    Ort::Value hTensor = Ort::Value::CreateTensor<float>(
+            memory_info, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
+    Ort::Value cTensor = Ort::Value::CreateTensor<float>(
+            memory_info, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
 
-    // Group all inputs for the model, using std::move to avoid copying Ort::Value objects
     std::array<Ort::Value, 4> ortInputs = {
             std::move(audioInputTensor),
             std::move(srTensor),
@@ -411,25 +408,33 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
             std::move(cTensor)
     };
 
-    // Run the model
     auto ortOutputs = ortSession->Run(Ort::RunOptions{nullptr}, inputNodeNames.data(), ortInputs.data(), ortInputs.size(), outputNodeNames.data(), outputNodeNames.size());
 
-    // Interpret the primary output to determine voice activity
     auto& outputTensor = ortOutputs[0];
     float* outputData = outputTensor.GetTensorMutableData<float>();
-    bool voiceDetected = outputData[0] > threshold; // Use the class's threshold attribute
+    bool voiceDetected = outputData[0] > threshold;
 
-    // Update the hidden and cell states with the output from the model
+    // Update the hidden and cell states
     auto& hOutputTensor = ortOutputs[1];
     auto& cOutputTensor = ortOutputs[2];
     std::memcpy(_h.data(), hOutputTensor.GetTensorMutableData<float>(), _h.size() * sizeof(float));
     std::memcpy(_c.data(), cOutputTensor.GetTensorMutableData<float>(), _c.size() * sizeof(float));
 
-    lastVoiceProbability = outputData[0]; // Assuming outputData[0] contains the voice probability
+    lastVoiceProbability = outputData[0];
     lastFrameSize = audioFrame.size();
     lastMaxAmplitude = *std::max_element(audioFrame.begin(), audioFrame.end());
 
-    return voiceDetected;
+    // Handling for anti-keychunking
+    if (voiceDetected) {
+        accumulatedVoiceTime += static_cast<float>(window_size_samples) / sr[0];
+        if (accumulatedVoiceTime >= minVoiceDuration) {
+            return true; // Only return true if the accumulated voice time exceeds the minimum
+        }
+    } else {
+        accumulatedVoiceTime = 0.0; // Reset if no voice detected
+    }
+
+    return false; // Default to false unless conditions are met
 }
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,

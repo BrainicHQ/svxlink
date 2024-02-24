@@ -197,6 +197,9 @@ class Reflector : public sigc::trackable
     size_t lastFrameSize = 0; // Store the last frame size
     float lastMaxAmplitude = 0.0f; // Store the max amplitude of the last frame
 
+    float minVoiceDuration = 0.2; // Minimum duration in seconds to consider as valid speech
+    float accumulatedVoiceTime = 0.0; // Accumulated duration of detected voice
+
     // Private methods for Silero VAD
     void initializeSileroVAD(const std::string& modelPath);
     bool processAudioWithSilero(const std::vector<float>& audioFrame);
