@@ -526,12 +526,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   return;
               }
           
-              std::cout << "Received audio data from " << client->callsign() << std::endl;
+              // std::cout << "Received audio data from " << client->callsign() << std::endl;
 
               uint32_t tg = TGHandler::instance()->TGForClient(client);
               if (!msg.audioData().empty() && (tg > 0))
               {
-                  std::cout << client->callsign() << ": Received audio data for TG #" << tg << std::endl;
+                  // std::cout << client->callsign() << ": Received audio data for TG #" << tg << std::endl;
                   client->appendAudioData(msg.audioData());
 
                   std::vector<float> audioFrameFloat;
