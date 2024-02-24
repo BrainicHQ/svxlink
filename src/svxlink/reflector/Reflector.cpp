@@ -552,10 +552,11 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   return;
               }
 
+
                // output the first hex content of msg.audioData() to check the audio data type
               std::cout << "First 16 bytes of audio data: ";
               for (int i = 0; i < 16; i++) {
-                  std::cout << std::hex << (int)msg.audioData()[i] << " ";
+                  std::cout << std::hex << (int)msg[i] << " ";
               }
               std::cout << std::endl;
 
@@ -573,7 +574,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               if (!msg.audioData().empty() && (tg > 0))
               {
                   std::cout << client->callsign() << ": Received audio data for TG #" << tg << std::endl;
-                  client->appendAudioData(msg.audioData());
+                  client->appendAudioData(msg);
 
                   std::vector<float> audioFrameFloat;
 
