@@ -136,8 +136,17 @@ Reflector::Reflector(void)
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
-    // Initialize the Silero VAD
-    initializeSileroVAD("/home/silviu/silero_vad.onnx");
+    // Retrieve the model path from the environment variable
+    const char* modelPathEnv = std::getenv("SILERO_MODEL_PATH");
+    if (modelPathEnv == nullptr) {
+        std::cerr << "Error: SILERO_MODEL_PATH environment variable is not set." << std::endl;
+        // Handle the error, perhaps exit the application
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::string modelPath(modelPathEnv);
+    // Initialize the Silero VAD with the model path from the environment variable
+    initializeSileroVAD(modelPath);
 } /* Reflector::Reflector */
 
 void Reflector::initializeSileroVAD(const std::string& modelPath) {
