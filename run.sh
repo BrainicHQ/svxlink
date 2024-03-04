@@ -11,6 +11,9 @@ git pull
 SILERO_MODEL_PATH=$(pwd)/silero_vad.onnx
 
 # Set the ONNX variable path
+# Download for your architecture from https://github.com/microsoft/onnxruntime/releases and extract it to the current directory and rename it to onnxruntime
+# The existing one is for arm64
+
 ONNXRUNTIME_ROOT_DIR=$(pwd)/onnxruntime
 
 # Export SILERO_MODEL_PATH for immediate use in this script
