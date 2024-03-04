@@ -62,7 +62,7 @@ cmake -DUSE_QT=OFF \
 sudo make install
 
 # Start the node and the reflector as a regular user
-/opt/rolink/bin/svxlink &
 /opt/rolink/bin/svxreflector &
+/opt/rolink/bin/svxlink
 
 echo "Script completed successfully."
