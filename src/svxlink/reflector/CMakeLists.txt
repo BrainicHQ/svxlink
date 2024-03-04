@@ -8,10 +8,15 @@ pkg_check_modules(OPUS REQUIRED opus)
 pkg_check_modules(SAMPLERATE REQUIRED samplerate)
 pkg_check_modules(OGG REQUIRED ogg)
 
-# ONNX Runtime setup remains unchanged
-set(ONNXRUNTIME_ROOT_DIR "/home/silviu/onnxruntime")
-find_library(ONNX_RUNTIME_LIB onnxruntime HINTS ${ONNXRUNTIME_ROOT_DIR}/lib)
+# Use an environment variable for ONNXRUNTIME_ROOT_DIR
+set(ONNXRUNTIME_ROOT_DIR $ENV{ONNXRUNTIME_ROOT_DIR})
 
+# Fallback in case the environment variable is not set
+if(NOT ONNXRUNTIME_ROOT_DIR)
+    message(FATAL_ERROR "Environment variable ONNXRUNTIME_ROOT_DIR is not set")
+endif()
+
+find_library(ONNX_RUNTIME_LIB onnxruntime HINTS ${ONNXRUNTIME_ROOT_DIR}/lib)
 if(NOT ONNX_RUNTIME_LIB)
     message(FATAL_ERROR "ONNX Runtime library not found")
 endif()

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Improved Bash Script
-
 # Exit script on any error and enable debugging
 set -eo pipefail
 # set -x  # Uncomment this line to enable debugging
@@ -12,14 +10,31 @@ git pull
 # Set the full path to the Silero model to current directory
 SILERO_MODEL_PATH=$(pwd)/silero_vad.onnx
 
+# Set the ONNX variable path
+ONNXRUNTIME_ROOT_DIR=$(pwd)/onnxruntime
+
 # Export SILERO_MODEL_PATH for immediate use in this script
 export SILERO_MODEL_PATH
 
-# Set the SILERO_MODEL_PATH environment variable for all users
-echo "export SILERO_MODEL_PATH=${SILERO_MODEL_PATH}" | sudo tee /etc/profile.d/silero_model.sh > /dev/null
+# Export ONNXRUNTIME_ROOT_DIR for immediate use in this script
+export ONNXRUNTIME_ROOT_DIR
 
-# Reload the system-wide environment variables to make SILERO_MODEL_PATH available in the current session
-source /etc/profile
+# Function to add or update an environment variable in /etc/environment
+set_env_variable() {
+    local var_name="$1"
+    local var_value="$2"
+    if grep -q "^${var_name}=" /etc/environment; then
+        # Variable exists, replace it
+        sudo sed -i "s|^${var_name}=.*|${var_name}=\"${var_value}\"|" /etc/environment
+    else
+        # Variable does not exist, append it
+        echo "${var_name}=\"${var_value}\"" | sudo tee -a /etc/environment > /dev/null
+    fi
+}
+
+# Set or update the environment variables in /etc/environment for all users
+set_env_variable "SILERO_MODEL_PATH" "$SILERO_MODEL_PATH"
+set_env_variable "ONNXRUNTIME_ROOT_DIR" "$ONNXRUNTIME_ROOT_DIR"
 
 # Clean the build directory
 rm -rf src/build
