@@ -247,6 +247,9 @@ class Reflector : public sigc::trackable
      */
     void requestQsy(ReflectorClient *client, uint32_t tg);
 
+    uint32_t randomQsyLo(void) const { return m_random_qsy_lo; }
+    uint32_t randomQsyHi(void) const { return m_random_qsy_hi; }
+
   private:
     Ort::Env ortEnv{ORT_LOGGING_LEVEL_WARNING, "SileroVAD"};
     std::unique_ptr<Ort::Session> ortSession;
