@@ -107,6 +107,72 @@ class ReflectorUdpMsg;
  * Class definitions
  *
  ****************************************************************************/
+class timestamp_t
+{
+public:
+    int start;
+    int end;
+
+    timestamp_t(int start = -1, int end = -1)
+            : start(start), end(end)
+    {
+    };
+
+    timestamp_t& operator=(const timestamp_t& a)
+    {
+        start = a.start;
+        end = a.end;
+        return *this;
+    };
+
+    bool operator==(const timestamp_t& a) const
+    {
+        return (start == a.start && end == a.end);
+    };
+    std::string c_str()
+    {
+
+        return format("{start:%08d,end:%08d}", start, end);
+    };
+private:
+
+    std::string format(const char* fmt, ...)
+    {
+        char buf[256];
+
+        va_list args;
+        va_start(args, fmt);
+        const auto r = std::vsnprintf(buf, sizeof buf, fmt, args);
+        va_end(args);
+
+        if (r < 0)
+
+            return {};
+
+        const size_t len = r;
+        if (len < sizeof buf)
+
+            return { buf, len };
+
+#if __cplusplus >= 201703L
+
+        std::string s(len, '\0');
+        va_start(args, fmt);
+        std::vsnprintf(s.data(), len + 1, fmt, args);
+        va_end(args);
+
+        return s;
+#else
+
+        auto vbuf = std::unique_ptr<char[]>(new char[len + 1]);
+        va_start(args, fmt);
+        std::vsnprintf(vbuf.get(), len + 1, fmt, args);
+        va_end(args);
+
+        return { vbuf.get(), len };
+#endif
+    };
+};
 
 /**
 @brief	The main reflector class
@@ -189,7 +255,6 @@ class Reflector : public sigc::trackable
     std::vector<const char*> outputNodeNames = {"output", "hn", "cn"};
     std::vector<float> _h, _c; // Hidden and cell states
     float threshold = 0.5; // Threshold for voice probability
-    float dynamicThreshold = 0.5; // Initialized to match threshold, adjusted dynamically
     std::vector<float>::size_type window_size_samples = 1536; // Assuming a fixed window size
     size_t frameSize = 1536;
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
@@ -198,14 +263,22 @@ class Reflector : public sigc::trackable
     size_t lastFrameSize = 0; // Store the last frame size
     float lastMaxAmplitude = 0.0f; // Store the max amplitude of the last frame
 
-    float minVoiceDuration = 0.2; // Minimum duration in seconds to consider as valid speech
-    float accumulatedVoiceTime = 0.0; // Accumulated duration of detected voice
-    float bufferPeriod = 0.3; // Buffer period in seconds to allow brief pauses
-    float bufferTime = 0.0; // Time to track buffer period
+    bool triggered = false;
+    int temp_end = 0;
+    int current_sample = 0;
+    int prev_end = 0;
+    int next_start = 0;
+    std::vector<timestamp_t> speeches;
+    timestamp_t current_speech;
+    int min_silence_samples_at_max_speech;
+    int min_silence_samples;
+    int min_speech_samples;
+    int max_speech_samples;
 
     // Private methods for Silero VAD
     void initializeSileroVAD(const std::string& modelPath);
     bool processAudioWithSilero(const std::vector<float>& audioFrame);
+    void resetSileroVADStates();
 
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;

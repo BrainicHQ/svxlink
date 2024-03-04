@@ -128,13 +128,13 @@ namespace {
  ****************************************************************************/
 
 Reflector::Reflector(void)
-  : m_srv(0), m_udp_sock(0), m_tg_for_v1_clients(1), m_random_qsy_lo(0),
-    m_random_qsy_hi(0), m_random_qsy_tg(0), m_http_server(0)
+        : m_srv(0), m_udp_sock(0), m_tg_for_v1_clients(1), m_random_qsy_lo(0),
+          m_random_qsy_hi(0), m_random_qsy_tg(0), m_http_server(0)
 {
-  TGHandler::instance()->talkerUpdated.connect(
-      mem_fun(*this, &Reflector::onTalkerUpdated));
-  TGHandler::instance()->requestAutoQsy.connect(
-      mem_fun(*this, &Reflector::onRequestAutoQsy));
+    TGHandler::instance()->talkerUpdated.connect(
+            mem_fun(*this, &Reflector::onTalkerUpdated));
+    TGHandler::instance()->requestAutoQsy.connect(
+            mem_fun(*this, &Reflector::onRequestAutoQsy));
 
     // Retrieve the model path from the environment variable
     const char* modelPathEnv = std::getenv("SILERO_MODEL_PATH");
@@ -157,7 +157,6 @@ void Reflector::initializeSileroVAD(const std::string& modelPath) {
 
     _h.resize(2 * 1 * 64, 0.0f); // Initialize hidden state to zeros
     _c.resize(2 * 1 * 64, 0.0f); // Initialize cell state to zeros
-    threshold = 0.5; // Example threshold, adjust based on your needs
 }
 
 Reflector::~Reflector(void)
@@ -355,6 +354,7 @@ void Reflector::clientConnected(Async::FramedTcpConnection *con)
   cout << "Client " << con->remoteHost() << ":" << con->remotePort()
        << " connected" << endl;
   m_client_con_map[con] = new ReflectorClient(this, con, m_cfg);
+  resetSileroVADStates();
 } /* Reflector::clientConnected */
 
 
@@ -388,75 +388,128 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
+void Reflector::resetSileroVADStates() {
+    std::memset(_h.data(), 0.0f, _h.size() * sizeof(float));
+    std::memset(_c.data(), 0.0f, _c.size() * sizeof(float));
+    triggered = false;
+    temp_end = 0;
+    current_sample = 0;
+    prev_end = next_start = 0;
+    speeches.clear();
+    current_speech = timestamp_t();
+}
+
 bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
-    if (audioFrame.size() != window_size_samples) {
-        std::cerr << "Audio frame size does not match expected window size: " << window_size_samples << " samples." << std::endl;
-        return false;
-    }
+        if (audioFrame.size() != window_size_samples) {
+            std::cerr << "Audio frame size does not match expected window size: " << window_size_samples << " samples." << std::endl;
+            return false;
+        }
 
-    Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    std::vector<int64_t> audioInputTensorShape = {1, static_cast<int64_t>(audioFrame.size())};
-    Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(
-            memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(),
-            audioInputTensorShape.data(), audioInputTensorShape.size());
+        Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        std::vector<int64_t> audioInputTensorShape = {1, static_cast<int64_t>(audioFrame.size())};
+        Ort::Value audioInputTensor = Ort::Value::CreateTensor<float>(
+                memory_info, const_cast<float*>(audioFrame.data()), audioFrame.size(),
+                audioInputTensorShape.data(), audioInputTensorShape.size());
 
-    std::vector<int64_t> srTensorShape = {1};
-    Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(
-            memory_info, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
+        std::vector<int64_t> srTensorShape = {1};
+        Ort::Value srTensor = Ort::Value::CreateTensor<int64_t>(
+                memory_info, sr.data(), sr.size(), srTensorShape.data(), srTensorShape.size());
 
-    std::vector<int64_t> hcTensorShape = {2, 1, 64};
-    Ort::Value hTensor = Ort::Value::CreateTensor<float>(
-            memory_info, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
-    Ort::Value cTensor = Ort::Value::CreateTensor<float>(
-            memory_info, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
+        std::vector<int64_t> hcTensorShape = {2, 1, 64};
+        Ort::Value hTensor = Ort::Value::CreateTensor<float>(
+                memory_info, _h.data(), _h.size(), hcTensorShape.data(), hcTensorShape.size());
+        Ort::Value cTensor = Ort::Value::CreateTensor<float>(
+                memory_info, _c.data(), _c.size(), hcTensorShape.data(), hcTensorShape.size());
 
-    std::array<Ort::Value, 4> ortInputs = {
-            std::move(audioInputTensor),
-            std::move(srTensor),
-            std::move(hTensor),
-            std::move(cTensor)
-    };
+        std::array<Ort::Value, 4> ortInputs = {
+                std::move(audioInputTensor),
+                std::move(srTensor),
+                std::move(hTensor),
+                std::move(cTensor)
+        };
 
-    auto ortOutputs = ortSession->Run(Ort::RunOptions{nullptr}, inputNodeNames.data(), ortInputs.data(), ortInputs.size(), outputNodeNames.data(), outputNodeNames.size());
+        auto ortOutputs = ortSession->Run(Ort::RunOptions{nullptr}, inputNodeNames.data(), ortInputs.data(), ortInputs.size(), outputNodeNames.data(), outputNodeNames.size());
 
-    auto& outputTensor = ortOutputs[0];
-    float* outputData = outputTensor.GetTensorMutableData<float>();
-    bool voiceDetected = outputData[0] > threshold;
+        auto& outputTensor = ortOutputs[0];
+        float* outputData = outputTensor.GetTensorMutableData<float>();
+        float speech_prob = outputData[0];
 
-    // Update the hidden and cell states
-    auto& hOutputTensor = ortOutputs[1];
-    auto& cOutputTensor = ortOutputs[2];
-    std::memcpy(_h.data(), hOutputTensor.GetTensorMutableData<float>(), _h.size() * sizeof(float));
-    std::memcpy(_c.data(), cOutputTensor.GetTensorMutableData<float>(), _c.size() * sizeof(float));
+        // Update hidden and cell states
+        auto& hOutputTensor = ortOutputs[1];
+        auto& cOutputTensor = ortOutputs[2];
+        std::memcpy(_h.data(), hOutputTensor.GetTensorMutableData<float>(), _h.size() * sizeof(float));
+        std::memcpy(_c.data(), cOutputTensor.GetTensorMutableData<float>(), _c.size() * sizeof(float));
 
-    lastVoiceProbability = outputData[0];
-    lastFrameSize = audioFrame.size();
-    lastMaxAmplitude = *std::max_element(audioFrame.begin(), audioFrame.end());
+        current_sample += window_size_samples;
+        lastVoiceProbability = outputData[0];
+        lastFrameSize = audioFrame.size();
+        lastMaxAmplitude = *std::max_element(audioFrame.begin(), audioFrame.end());
 
-    // Implement dynamic threshold adjustment and buffer for speech end detection
-    dynamicThreshold = std::min(threshold, std::max(dynamicThreshold, lastVoiceProbability - 0.1f));
+        std::cout << "VAD Model Output: Voice Probability = " << lastVoiceProbability
+              << " (Threshold = " << threshold << ")" << std::endl;
 
-    if (voiceDetected) {
-        accumulatedVoiceTime += static_cast<float>(window_size_samples) / sr[0];
-        bufferTime = 0.0; // Reset buffer time if voice is detected
-    } else {
-        if (bufferTime < bufferPeriod) {
-            bufferTime += static_cast<float>(window_size_samples) / sr[0];
-            // Only consider extending voice detection during the buffer period if accumulated voice time is significant
-            if (accumulatedVoiceTime >= minVoiceDuration) {
-                return true;
+        if (speech_prob >= threshold) {
+            if (temp_end != 0) {
+                temp_end = 0;
+                if (next_start < prev_end)
+                    next_start = current_sample - window_size_samples;
+            }
+            if (!triggered) {
+                triggered = true;
+                current_speech.start = current_sample - window_size_samples;
+            }
+        } else if (triggered && (current_sample - current_speech.start > max_speech_samples)) {
+            if (prev_end > 0) {
+                current_speech.end = prev_end;
+                speeches.push_back(current_speech);
+                current_speech = timestamp_t();
+
+                if (next_start < prev_end)
+                    triggered = false;
+                else {
+                    current_speech.start = next_start;
+                }
+                prev_end = 0;
+                next_start = 0;
+                temp_end = 0;
+            } else {
+                current_speech.end = current_sample;
+                speeches.push_back(current_speech);
+                current_speech = timestamp_t();
+                prev_end = 0;
+                next_start = 0;
+                temp_end = 0;
+                triggered = false;
+            }
+        } else if (speech_prob >= (threshold - 0.15) && speech_prob < threshold) {
+            // Do nothing
+        } else if (speech_prob < (threshold - 0.15)) {
+            if (triggered) {
+                if (temp_end == 0) {
+                    temp_end = current_sample;
+                }
+                if (current_sample - temp_end > min_silence_samples_at_max_speech)
+                    prev_end = temp_end;
+
+                if (current_sample - temp_end < min_silence_samples) {
+                    // Do nothing
+                } else {
+                    current_speech.end = temp_end;
+                    if (current_speech.end - current_speech.start > min_speech_samples) {
+                        speeches.push_back(current_speech);
+                        current_speech = timestamp_t();
+                        prev_end = 0;
+                        next_start = 0;
+                        temp_end = 0;
+                        triggered = false;
+                    }
+                }
             }
         }
-        // Reset accumulated voice time if no voice detected beyond the buffer period
-        accumulatedVoiceTime = 0.0;
+
+        // Return true if voice is currently detected
+        return triggered;
     }
-
-    // Reset dynamic threshold if no voice is detected beyond the buffer period
-    dynamicThreshold = threshold;
-
-    // Return true if accumulated voice time meets or exceeds minimum voice duration
-    return accumulatedVoiceTime >= minVoiceDuration;
-}
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
@@ -548,9 +601,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                   while (client->extractAudioFrame(audioFrameFloat, frameSize)) {
                       // Prepare input tensor from audioFrameFloat for Silero VAD
                       bool voiceDetected = processAudioWithSilero(audioFrameFloat);
-
-                      std::cout << "VAD Model Output: Voice Probability = " << lastVoiceProbability
-                                << " (Threshold = " << threshold << ")" << std::endl;
 
                       if (voiceDetected) // Voice detected
                       {
