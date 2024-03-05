@@ -258,8 +258,8 @@ class Reflector : public sigc::trackable
     std::vector<const char*> outputNodeNames = {"output", "hn", "cn"};
     std::vector<float> _h, _c; // Hidden and cell states
     float threshold = 0.5; // Threshold for voice probability
-    std::vector<float>::size_type window_size_samples = 1536; // Assuming a fixed window size
-    size_t frameSize = 1536;
+    std::vector<float>::size_type window_size_samples = 1024; // Assuming a fixed window size
+    size_t frameSize = 1024;
     std::vector<int64_t> sr = {16000}; // Assuming a fixed sample rate
 
     float lastVoiceProbability = 0.0f; // Store the last voice probability
@@ -269,17 +269,18 @@ class Reflector : public sigc::trackable
     bool triggered = false;
     int temp_end = 0;
     int current_sample = 0;
-    int prev_end = 0;
+    int prev_end;
     int next_start = 0;
     std::vector<timestamp_t> speeches;
     timestamp_t current_speech;
     int min_silence_samples_at_max_speech;
     int min_silence_samples;
     int min_speech_samples;
-    int max_speech_samples;
+    float max_speech_samples;
+    int speech_pad_samples;
 
     // Private methods for Silero VAD
-    void initializeSileroVAD(const std::string& modelPath);
+    void initializeSileroVAD(const std::string& modelPath, int sampleRate, int windowFrameSize, float thresholdValue, int minSilenceDurationMs, int speechPadMs, int minSpeechDurationMs, float maxSpeechDurationS);
     bool processAudioWithSilero(const std::vector<float>& audioFrame);
     void resetSileroVADStates();
 

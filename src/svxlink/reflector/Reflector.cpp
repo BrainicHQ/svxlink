@@ -146,17 +146,29 @@ Reflector::Reflector(void)
 
     std::string modelPath(modelPathEnv);
     // Initialize the Silero VAD with the model path from the environment variable
-    initializeSileroVAD(modelPath);
+    initializeSileroVAD(modelPath, 16000, 64, 0.5, 0, 64, 64, std::numeric_limits<float>::infinity());
 } /* Reflector::Reflector */
 
-void Reflector::initializeSileroVAD(const std::string& modelPath) {
+void Reflector::initializeSileroVAD(const std::string& modelPath, int sampleRate, int windowFrameSize, float thresholdValue, int minSilenceDurationMs, int speechPadMs, int minSpeechDurationMs, float maxSpeechDurationS) {
+    ortEnv = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "SileroVAD");
     Ort::SessionOptions sessionOptions;
     sessionOptions.SetIntraOpNumThreads(1);
-    sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+    sessionOptions.SetInterOpNumThreads(1);
+    sessionOptions.SetGraphOptimizationLevel(ORT_ENABLE_ALL);
     ortSession = std::make_unique<Ort::Session>(ortEnv, modelPath.c_str(), sessionOptions);
 
     _h.resize(2 * 1 * 64, 0.0f); // Initialize hidden state to zeros
     _c.resize(2 * 1 * 64, 0.0f); // Initialize cell state to zeros
+    sr.resize(1);
+    sr[0] = sampleRate;
+    threshold = thresholdValue;
+    window_size_samples = windowFrameSize * (sampleRate / 1000);
+
+    min_speech_samples = (sampleRate / 1000) * minSpeechDurationMs;
+    speech_pad_samples = (sampleRate / 1000) * speechPadMs;
+    max_speech_samples = static_cast<float>(sampleRate) * maxSpeechDurationS - window_size_samples - 2 * speech_pad_samples;
+    min_silence_samples = (sampleRate / 1000) * minSilenceDurationMs;
+    min_silence_samples_at_max_speech = (sampleRate / 1000) * 98; // Adjusted for maximum speech
 }
 
 Reflector::~Reflector(void)
@@ -354,7 +366,6 @@ void Reflector::clientConnected(Async::FramedTcpConnection *con)
   cout << "Client " << con->remoteHost() << ":" << con->remotePort()
        << " connected" << endl;
   m_client_con_map[con] = new ReflectorClient(this, con, m_cfg);
-  resetSileroVADStates();
 } /* Reflector::clientConnected */
 
 
@@ -389,8 +400,8 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
 } /* Reflector::clientDisconnected */
 
 void Reflector::resetSileroVADStates() {
-    std::memset(_h.data(), 0.0f, _h.size() * sizeof(float));
-    std::memset(_c.data(), 0.0f, _c.size() * sizeof(float));
+    std::fill(_h.begin(), _h.end(), 0.0f);
+    std::fill(_c.begin(), _c.end(), 0.0f);
     triggered = false;
     temp_end = 0;
     current_sample = 0;
@@ -581,6 +592,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
       {
           if (!client->isBlocked())
           {
+              resetSileroVADStates();
               MsgUdpAudio msg;
               if (!msg.unpack(ss))
               {
