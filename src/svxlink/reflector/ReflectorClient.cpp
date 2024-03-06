@@ -62,7 +62,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "ReflectorClient.h"
 #include "Reflector.h"
 #include "TGHandler.h"
-
+#include "opus_wrapper.h"
 
 /****************************************************************************
  *
@@ -275,9 +275,37 @@ void ReflectorClient::setBlock(unsigned blocktime)
   m_remaining_blocktime = blocktime;
 } /* ReflectorClient::setBlock */
 
-void ReflectorClient::appendAudioData(const std::vector<uint8_t>& data) {
+std::vector<opus_int16> decodeOpusData(const std::vector<uint8_t>& opusData, int frame_size) {
+    const int numChannels = 1; // Mono
+
+    // Initialize the Opus decoder
+    opus::Decoder decoder(16000, numChannels);
+    if (!decoder.valid()) {
+        std::cerr << "Failed to initialize Opus decoder." << std::endl;
+        return {};
+    }
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decoder.Decode({opusData}, frame_size, false);
+    if (pcmData.empty()) {
+        std::cerr << "Decoding failed or no data was decoded." << std::endl;
+        return {};
+    }
+
+    return pcmData;
+}
+
+void ReflectorClient::appendAudioData(const std::vector<uint8_t>& opusData) {
     std::lock_guard<std::mutex> lock(audioBufferMutex);
-    audioBuffer.insert(audioBuffer.end(), data.begin(), data.end());
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decodeOpusData(opusData, 320); // Assuming frame_size is 320
+
+    // Convert pcmData to uint8_t for storing in the buffer
+    std::vector<uint8_t> pcmDataBytes(pcmData.size() * sizeof(opus_int16));
+    memcpy(pcmDataBytes.data(), pcmData.data(), pcmDataBytes.size());
+
+    audioBuffer.insert(audioBuffer.end(), pcmDataBytes.begin(), pcmDataBytes.end());
 }
 
 bool ReflectorClient::extractAudioFrame(std::vector<float>& audioFrameFloat, size_t frameSize) {

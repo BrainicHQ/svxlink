@@ -62,7 +62,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Reflector.h"
 #include "ReflectorClient.h"
 #include "TGHandler.h"
-
+#include "wav.h"
+#include "opus_wrapper.h"
 
 /****************************************************************************
  *
@@ -459,68 +460,68 @@ bool Reflector::processAudioWithSilero(const std::vector<float>& audioFrame) {
         std::cout << "VAD Model Output: Voice Probability = " << lastVoiceProbability
               << " (Threshold = " << threshold << ")" << std::endl;
 
-        if (speech_prob >= threshold) {
-            if (temp_end != 0) {
-                temp_end = 0;
-                if (next_start < prev_end)
-                    next_start = current_sample - window_size_samples;
-            }
-            if (!triggered) {
-                triggered = true;
-                current_speech.start = current_sample - window_size_samples;
-            }
-        } else if (triggered && (current_sample - current_speech.start > max_speech_samples)) {
-            if (prev_end > 0) {
-                current_speech.end = prev_end;
-                speeches.push_back(current_speech);
-                current_speech = timestamp_t();
-
-                if (next_start < prev_end)
-                    triggered = false;
-                else {
-                    current_speech.start = next_start;
-                }
-                prev_end = 0;
-                next_start = 0;
-                temp_end = 0;
-            } else {
-                current_speech.end = current_sample;
-                speeches.push_back(current_speech);
-                current_speech = timestamp_t();
-                prev_end = 0;
-                next_start = 0;
-                temp_end = 0;
-                triggered = false;
-            }
-        } else if (speech_prob >= (threshold - 0.15) && speech_prob < threshold) {
-            // Do nothing
-        } else if (speech_prob < (threshold - 0.15)) {
-            if (triggered) {
-                if (temp_end == 0) {
-                    temp_end = current_sample;
-                }
-                if (current_sample - temp_end > min_silence_samples_at_max_speech)
-                    prev_end = temp_end;
-
-                if (current_sample - temp_end < min_silence_samples) {
-                    // Do nothing
-                } else {
-                    current_speech.end = temp_end;
-                    if (current_speech.end - current_speech.start > min_speech_samples) {
-                        speeches.push_back(current_speech);
-                        current_speech = timestamp_t();
-                        prev_end = 0;
-                        next_start = 0;
-                        temp_end = 0;
-                        triggered = false;
-                    }
-                }
+        // Voice detected
+    if (speech_prob >= threshold) {
+        if (!triggered) {
+            triggered = true;
+            current_speech.start = current_sample - window_size_samples;
+        }
+        silence_counter = 0; // Reset silence counter
+    } else {
+        if (triggered) {
+            // Increment silence counter if we are in a speech segment
+            silence_counter += window_size_samples;
+            
+            // If silence duration exceeds the threshold, end the speech segment
+            if (silence_counter >= min_silence_samples) {
+                current_speech.end = current_sample - silence_counter;
+                speeches.push_back(current_speech); // Save the speech segment
+                current_speech = timestamp_t(); // Reset current speech segment
+                triggered = false; // No longer in a speech segment
             }
         }
+    }
 
         // Return true if voice is currently detected
         return triggered;
     }
+
+void Reflector::writeAudioToWavFile(const std::vector<uint8_t>& opusData, int sampleRate, const std::string& callsign) {
+    const int numChannels = 1; // Mono
+    const int bitsPerSample = 16;
+    const int frame_size = 320;
+
+    // Initialize the Opus decoder
+    opus::Decoder decoder(16000, numChannels);
+    if (!decoder.valid()) {
+        std::cerr << "Failed to initialize Opus decoder." << std::endl;
+        return;
+    }
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decoder.Decode({opusData}, frame_size, false);
+    if (pcmData.empty()) {
+        std::cerr << "Decoding failed or no data was decoded." << std::endl;
+        return;
+    }
+
+    // Assuming `pcmData` is in a format compatible with `WavWriter`, or you may need a conversion step here
+    std::vector<float> floatData(pcmData.size());
+    for (size_t i = 0; i < pcmData.size(); ++i) {
+        // Convert each sample from 16-bit integer to float representation
+        floatData[i] = pcmData[i] / static_cast<float>(INT16_MAX);
+    }
+
+    // Construct the output file path
+    std::string desiredPath = "/home/silviu/Desktop/audio/";
+    std::string filename = desiredPath + callsign + ".wav";
+
+    // Use WavWriter to create the WAV file
+    wav::WavWriter writer(floatData.data(), floatData.size(), numChannels, sampleRate, bitsPerSample);
+    writer.Write(filename);
+
+    std::cout << "Audio data written to " << filename << std::endl;
+}
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
@@ -634,6 +635,8 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                           // Continue checking the next chunk if any
                       }
                   }
+                  // Save the audio data to a WAV file
+                  //writeAudioToWavFile(msg.audioData(), 16000, client->callsign());
                   break; // Exit the message handling after all frames are processed
               }
           }

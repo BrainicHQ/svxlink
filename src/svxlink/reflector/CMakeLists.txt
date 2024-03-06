@@ -60,6 +60,7 @@ add_executable(svxreflector
         Reflector.cpp
         ReflectorClient.cpp
         TGHandler.cpp
+        opus_wrapper.cpp
 )
 
 target_link_libraries(svxreflector ${LIBS})

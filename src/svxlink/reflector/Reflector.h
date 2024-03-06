@@ -278,11 +278,13 @@ class Reflector : public sigc::trackable
     int min_speech_samples;
     float max_speech_samples;
     int speech_pad_samples;
+    int silence_counter;
 
     // Private methods for Silero VAD
     void initializeSileroVAD(const std::string& modelPath, int sampleRate, int windowFrameSize, float thresholdValue, int minSilenceDurationMs, int speechPadMs, int minSpeechDurationMs, float maxSpeechDurationS);
     bool processAudioWithSilero(const std::vector<float>& audioFrame);
     void resetSileroVADStates();
+    void writeAudioToWavFile(const std::vector<uint8_t>& opusData, int sampleRate, const std::string& callsign);
 
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
