@@ -147,7 +147,7 @@ Reflector::Reflector(void)
 
     std::string modelPath(modelPathEnv);
     // Initialize the Silero VAD with the model path from the environment variable
-    initializeSileroVAD(modelPath, 16000, 64, 0.5, 0, 64, 64, std::numeric_limits<float>::infinity());
+    initializeSileroVAD(modelPath, 16000, 64, 0.25, 500, 300, 0, std::numeric_limits<float>::infinity());
 } /* Reflector::Reflector */
 
 void Reflector::initializeSileroVAD(const std::string& modelPath, int sampleRate, int windowFrameSize, float thresholdValue, int minSilenceDurationMs, int speechPadMs, int minSpeechDurationMs, float maxSpeechDurationS) {

@@ -62,7 +62,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <vector>
 
 #include <opus/opus.h>
-#include <samplerate.h>
+// #include <samplerate.h>
 #include <ogg/ogg.h>
 
 
@@ -482,7 +482,7 @@ class ReflectorClient
     Json::Value                 m_node_info;
 
     OpusDecoder* opusDecoder = nullptr;
-    SRC_STATE* srcState = nullptr;
+    // SRC_STATE* srcState = nullptr;
     int srcError = 0;
     ogg_sync_state oy;
     ogg_stream_state os;

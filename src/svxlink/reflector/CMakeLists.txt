@@ -5,7 +5,7 @@ find_package(GCrypt REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(OPUS REQUIRED opus)
-pkg_check_modules(SAMPLERATE REQUIRED samplerate)
+#pkg_check_modules(SAMPLERATE REQUIRED samplerate)
 pkg_check_modules(OGG REQUIRED ogg)
 
 # Use an environment variable for ONNXRUNTIME_ROOT_DIR
