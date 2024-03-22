@@ -51,6 +51,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <AsyncTimer.h>
 #include <AsyncHttpServerConnection.h>
 
+extern "C" {
+#include <fvad.h>
+}
 
 /****************************************************************************
  *
@@ -185,6 +188,7 @@ class Reflector : public sigc::trackable
     uint32_t randomQsyHi(void) const { return m_random_qsy_hi; }
 
   private:
+    Fvad* vadInst;
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
     typedef Async::TcpServer<Async::FramedTcpConnection> FramedTcpServer;

@@ -56,7 +56,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Reflector.h"
 #include "ReflectorClient.h"
 #include "TGHandler.h"
-
+#include "opus_wrapper.h"
 
 /****************************************************************************
  *
@@ -129,6 +129,23 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onTalkerUpdated));
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
+
+    // Initialize three VAD instances with different aggressiveness levels
+    vadInst = fvad_new();
+
+    if (!vadInst) {
+        std::cerr << "*** ERROR: Failed to VAD instance\n";
+        exit(EXIT_FAILURE); // Or handle the error as appropriate
+    }
+
+
+    if (fvad_set_sample_rate(vadInst, 16000) == -1) {
+        std::cerr << "*** ERROR: Failed to set sample rate on VAD instance\n";
+        exit(EXIT_FAILURE); // Or handle the error as appropriate
+    }
+
+    fvad_set_mode(vadInst, 3); // More aggressive
+
 } /* Reflector::Reflector */
 
 
@@ -143,6 +160,12 @@ Reflector::~Reflector(void)
   m_client_con_map.clear();
   ReflectorClient::cleanup();
   delete TGHandler::instance();
+
+    // Free the VAD instances
+    if (vadInst) {
+        fvad_free(vadInst);
+        vadInst = nullptr;
+    }
 } /* Reflector::~Reflector */
 
 
@@ -360,6 +383,23 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
+std::vector<opus_int16> decodeOpusData(const std::vector<uint8_t>& opusData, int frame_size) {
+    // Initialize the Opus decoder
+    opus::Decoder decoder(16000, 1);
+    if (!decoder.valid()) {
+        std::cerr << "Failed to initialize Opus decoder." << std::endl;
+        return {};
+    }
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decoder.Decode({opusData}, frame_size, false);
+    if (pcmData.empty()) {
+        std::cerr << "Decoding failed or no data was decoded." << std::endl;
+        return {};
+    }
+
+    return pcmData;
+}
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
@@ -427,45 +467,51 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
     case MsgUdpHeartbeat::TYPE:
       break;
 
-    case MsgUdpAudio::TYPE:
-    {
-      if (!client->isBlocked())
+      case MsgUdpAudio::TYPE:
       {
-        MsgUdpAudio msg;
-        if (!msg.unpack(ss))
-        {
-          cerr << "*** WARNING[" << client->callsign()
-               << "]: Could not unpack incoming MsgUdpAudioV1 message" << endl;
-          return;
-        }
-        uint32_t tg = TGHandler::instance()->TGForClient(client);
-        if (!msg.audioData().empty() && (tg > 0))
-        {
-          ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-          if (talker == 0)
+          if (!client->isBlocked())
           {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            talker = TGHandler::instance()->talkerForTG(tg);
-          }
-          if (talker == client)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            broadcastUdpMsg(msg,
-                ReflectorClient::mkAndFilter(
-                  ReflectorClient::ExceptFilter(client),
-                  ReflectorClient::TgFilter(tg)));
-            //broadcastUdpMsgExcept(tg, client, msg,
-            //    ProtoVerRange(ProtoVer(0, 6),
-            //                  ProtoVer(1, ProtoVer::max().minor())));
-            //MsgUdpAudio msg_v2(msg);
-            //broadcastUdpMsgExcept(tg, client, msg_v2,
-            //    ProtoVerRange(ProtoVer(2, 0), ProtoVer::max()));
-          }
-        }
-      }
-      break;
-    }
+              MsgUdpAudio msg;
+              if (!msg.unpack(ss))
+              {
+                  std::cerr << "*** WARNING[" << client->callsign() << "]: Could not unpack incoming MsgUdpAudioV1 message" << std::endl;
+                  return;
+              }
+              uint32_t tg = TGHandler::instance()->TGForClient(client);
+              if (!msg.audioData().empty() && (tg > 0))
+              {
+                  // Decode the Opus data to PCM format immediately
+                  auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
+                  if (pcmData.empty()) {
+                      std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
+                      return; // Skip further processing for this data chunk
+                  }
 
+                  // Initialize score to 0
+                  int vad_result = fvad_process(vadInst, pcmData.data(), pcmData.size());
+
+                  if (vad_result == 1) // If any VAD detected voice
+                  {
+                      std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
+                      ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
+                      if (talker == nullptr || talker == client)
+                      {
+                          TGHandler::instance()->setTalkerForTG(tg, client);
+                          broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
+                      }
+                  }
+                  else if (vad_result == -1)
+                  {
+                      std::cerr << "Error while processing VAD, invalid frame length\n";
+                  }
+                  else // No voice detected by any VAD
+                  {
+                       std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
+                  }
+              }
+          }
+          break;
+      }
     //case MsgUdpAudio::TYPE:
     //{
     //  if (!client->isBlocked())
