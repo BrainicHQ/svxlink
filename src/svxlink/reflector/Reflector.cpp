@@ -56,6 +56,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Reflector.h"
 #include "ReflectorClient.h"
 #include "TGHandler.h"
+#include "opus_wrapper.h"
+#include "VadIterator.h"
 
 
 /****************************************************************************
@@ -129,8 +131,13 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onTalkerUpdated));
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
+
+    initializeVadIterator();
 } /* Reflector::Reflector */
 
+void Reflector::initializeVadIterator() {
+    vadIterator = std::make_unique<VadIterator>(L"/home/silviu/silero-vad/files/silero_vad.onnx");
+}
 
 Reflector::~Reflector(void)
 {
@@ -360,6 +367,32 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
+std::vector<opus_int16> decodeOpusData(const std::vector<uint8_t>& opusData, int frame_size) {
+    // Initialize the Opus decoder
+    opus::Decoder decoder(16000, 1);
+    if (!decoder.valid()) {
+        std::cerr << "Failed to initialize Opus decoder." << std::endl;
+        return {};
+    }
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decoder.Decode({opusData}, frame_size, false);
+    if (pcmData.empty()) {
+        std::cerr << "Decoding failed or no data was decoded." << std::endl;
+        return {};
+    }
+
+    return pcmData;
+}
+
+std::vector<float> convertPcmToFloat(const std::vector<short>& pcmData) {
+    std::vector<float> floatData(pcmData.size());
+    for (size_t i = 0; i < pcmData.size(); ++i) {
+        // Normalize the PCM data to the range [-1.0, 1.0]
+        floatData[i] = pcmData[i] / 32768.0f;
+    }
+    return floatData;
+}
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
@@ -441,7 +474,45 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
         uint32_t tg = TGHandler::instance()->TGForClient(client);
         if (!msg.audioData().empty() && (tg > 0))
         {
-          ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
+            // Decode the Opus data to PCM format immediately
+            auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
+            if (pcmData.empty()) {
+                std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
+                return; // Skip further processing for this data chunk
+            }
+
+            auto pcmDataFloat = convertPcmToFloat(pcmData);
+            // accumulate at least 1024 pcm samples before processing
+
+            // Accumulate floating-point PCM samples for processing
+            pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+
+// Process all batches of 1024 samples
+            while (pcmSampleBuffer.size() >= 4096) {
+                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 4096);
+                vadIterator->process(batchToProcess);
+
+                // Erase the processed 1024 samples, leaving any excess in the buffer
+                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 4096);
+            }
+
+// After processing, check if voice is present
+            if (vadIterator->isVoicePresent()) {
+                // Voice detected, handle accordingly
+                std::cout << "Voice detected in the audio stream." << std::endl;
+
+                // Optionally, get and use the speech timestamps
+                auto stamps = vadIterator->get_speech_timestamps();
+                std::cout << "Stamps size: " << stamps.size() << std::endl;
+                for (size_t i = 0; i < stamps.size(); ++i) {
+                    std::cout << stamps[i].c_str() << std::endl;
+                }
+            }
+            else {
+                // std::cout << "No voice detected in the current batch." << std::endl;
+            }
+
+            ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
           if (talker == 0)
           {
             TGHandler::instance()->setTalkerForTG(tg, client);

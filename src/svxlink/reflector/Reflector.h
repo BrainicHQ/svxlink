@@ -60,7 +60,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "ProtoVer.h"
 #include "ReflectorClient.h"
-
+#include "VadIterator.h"
 
 /****************************************************************************
  *
@@ -216,6 +216,9 @@ class Reflector : public sigc::trackable
     void onRequestAutoQsy(uint32_t from_tg);
     uint32_t nextRandomQsyTg(void);
 
+    void initializeVadIterator();
+    std::unique_ptr<VadIterator> vadIterator;
+    std::vector<float> pcmSampleBuffer;
 };  /* class Reflector */
 
 
