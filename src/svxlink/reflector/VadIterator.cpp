@@ -143,9 +143,9 @@ void VadIterator::predict(const std::vector<float> &data)
     float *cn = ort_outputs[2].GetTensorMutableData<float>();
     std::memcpy(_c.data(), cn, size_hc * sizeof(float));
 
-    float lastMaxAmplitude = *std::max_element(data.begin(), data.end());
+    //float lastMaxAmplitude = *std::max_element(data.begin(), data.end());
     // debug the speech probability in percentage
-    std::cout << "speech_prob: " << speech_prob * 100 << "% lastMaxAmplitude: " << lastMaxAmplitude << std::endl;
+    //std::cout << "speech_prob: " << speech_prob * 100 << "% lastMaxAmplitude: " << lastMaxAmplitude << std::endl;
 
     // Push forward sample index
     current_sample += window_size_samples;

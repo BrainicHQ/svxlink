@@ -497,41 +497,26 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             }
 
 // After processing, check if voice is present
-            if (vadIterator->isVoicePresent()) {
-                // Voice detected, handle accordingly
-                std::cout << "Voice detected in the audio stream." << std::endl;
+            if (vadIterator->isVoicePresent())
+            {
+                // std::cout << "Voice detected\n";
 
-                // Optionally, get and use the speech timestamps
-                auto stamps = vadIterator->get_speech_timestamps();
-                std::cout << "Stamps size: " << stamps.size() << std::endl;
-                for (size_t i = 0; i < stamps.size(); ++i) {
-                    std::cout << stamps[i].c_str() << std::endl;
+                ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
+                if (talker == 0)
+                {
+                    TGHandler::instance()->setTalkerForTG(tg, client);
+                    talker = TGHandler::instance()->talkerForTG(tg);
                 }
-            }
-            else {
-                // std::cout << "No voice detected in the current batch." << std::endl;
-            }
+                if (talker == client)
+                {
+                    TGHandler::instance()->setTalkerForTG(tg, client);
+                    broadcastUdpMsg(msg,
+                                    ReflectorClient::mkAndFilter(
+                                            ReflectorClient::ExceptFilter(client),
+                                            ReflectorClient::TgFilter(tg)));
+                }
 
-            ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-          if (talker == 0)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            talker = TGHandler::instance()->talkerForTG(tg);
-          }
-          if (talker == client)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            broadcastUdpMsg(msg,
-                ReflectorClient::mkAndFilter(
-                  ReflectorClient::ExceptFilter(client),
-                  ReflectorClient::TgFilter(tg)));
-            //broadcastUdpMsgExcept(tg, client, msg,
-            //    ProtoVerRange(ProtoVer(0, 6),
-            //                  ProtoVer(1, ProtoVer::max().minor())));
-            //MsgUdpAudio msg_v2(msg);
-            //broadcastUdpMsgExcept(tg, client, msg_v2,
-            //    ProtoVerRange(ProtoVer(2, 0), ProtoVer::max()));
-          }
+            }
         }
       }
       break;
