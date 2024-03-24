@@ -485,19 +485,27 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             // cout << "Received " << pcmDataFloat.size() << " samples\n";
             // accumulate at least 1024 pcm samples before processing
 
+            // sa aplicam implementarea doar la o lista de clienti (numele) si sa se aplice pentru maxim 2-3 secunde
+
             // Accumulate floating-point PCM samples for processing
             pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+            std::vector<timestamp_t> stamps;
 
-// Process all batches of 1024 samples
-            while (pcmSampleBuffer.size() >= 8000) {
-                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 8000);
+            // Process all batches of 1024 samples
+            while (pcmSampleBuffer.size() >= 7680) {
+                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 7680);
                 vadIterator->process(batchToProcess);
 
+                stamps = vadIterator->get_speech_timestamps();
+                for (auto & stamp : stamps) {
+                    std::cout << stamp.c_str() << std::endl;
+                }
+
                 // Erase the processed 1024 samples, leaving any excess in the buffer
-                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 8000);
+                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 7680);
             }
 
-// After processing, check if voice is present
+            // After processing, check if voice is present
             if (vadIterator->isVoicePresent())
             {
                 // std::cout << "Voice detected\n";
