@@ -189,6 +189,7 @@ class Reflector : public sigc::trackable
 
   private:
     Fvad* vadInst;
+    std::vector<int16_t> pcmSampleBuffer;
     typedef std::map<Async::FramedTcpConnection*,
                      ReflectorClient*> ReflectorClientConMap;
     typedef Async::TcpServer<Async::FramedTcpConnection> FramedTcpServer;

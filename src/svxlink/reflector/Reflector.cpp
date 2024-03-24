@@ -487,26 +487,36 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                       return; // Skip further processing for this data chunk
                   }
 
-                  // Initialize score to 0
-                  int vad_result = fvad_process(vadInst, pcmData.data(), pcmData.size());
+                  // Accumulate the PCM data in the buffer
+                  pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmData.begin(), pcmData.end());
 
-                  if (vad_result == 1) // If any VAD detected voice
-                  {
+                  bool voiceDetected = false;
+                  // Process all batches of 480 samples
+                  while (pcmSampleBuffer.size() >= 480) {
+                      // Directly use the data from pcmSampleBuffer for VAD processing
+                      int vad_result = fvad_process(vadInst, pcmSampleBuffer.data(), 480);
+                      if (vad_result == 1) {
+                          voiceDetected = true;
+                          // Break the loop if voice is detected, no need to process further batches
+                          break;
+                      } else if (vad_result == -1) {
+                          std::cerr << "Error while processing VAD, invalid frame length\n";
+                          // Decide if you want to break or continue processing here
+                          break;
+                      }
+                      // Erase the processed 480 samples, leaving any excess in the buffer
+                      pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 480);
+                  }
+
+                  if (voiceDetected) {
                       std::cout << client->callsign() << ": Voice detected, broadcasting audio." << std::endl;
                       ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-                      if (talker == nullptr || talker == client)
-                      {
+                      if (talker == nullptr || talker == client) {
                           TGHandler::instance()->setTalkerForTG(tg, client);
                           broadcastUdpMsg(msg, ReflectorClient::mkAndFilter(ReflectorClient::ExceptFilter(client), ReflectorClient::TgFilter(tg)));
                       }
-                  }
-                  else if (vad_result == -1)
-                  {
-                      std::cerr << "Error while processing VAD, invalid frame length\n";
-                  }
-                  else // No voice detected by any VAD
-                  {
-                       std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
+                  } else {
+                      std::cout << client->callsign() << ": No voice detected, skipping this frame." << std::endl;
                   }
               }
           }
