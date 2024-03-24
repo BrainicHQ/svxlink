@@ -482,18 +482,19 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             }
 
             auto pcmDataFloat = convertPcmToFloat(pcmData);
+            // cout << "Received " << pcmDataFloat.size() << " samples\n";
             // accumulate at least 1024 pcm samples before processing
 
             // Accumulate floating-point PCM samples for processing
             pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
 
 // Process all batches of 1024 samples
-            while (pcmSampleBuffer.size() >= 4096) {
-                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 4096);
+            while (pcmSampleBuffer.size() >= 8000) {
+                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 8000);
                 vadIterator->process(batchToProcess);
 
                 // Erase the processed 1024 samples, leaving any excess in the buffer
-                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 4096);
+                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 8000);
             }
 
 // After processing, check if voice is present
