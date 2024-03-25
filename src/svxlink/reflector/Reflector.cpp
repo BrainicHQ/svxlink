@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include <cassert>
 #include <json/json.h>
-
+#include <fftw3.h>
 
 /****************************************************************************
  *
@@ -394,6 +394,76 @@ std::vector<float> convertPcmToFloat(const std::vector<short>& pcmData) {
     return floatData;
 }
 
+void analyzeAudioWithFFTW(const std::vector<float>& pcmDataFloat) {
+    const double sampleRate = 16000.0; // Sample rate in Hz
+    int N = pcmDataFloat.size(); // Number of samples in the PCM data, consider increasing for better frequency resolution
+
+    // Known tone frequencies
+    const double knownTone1Freq = 1000.0; // in Hz
+    const double knownTone2Freq = 1500.0; // in Hz
+
+    // Calculate bin indices for known tones, ensuring they are within bounds
+    int tone1Bin = static_cast<int>(lround((knownTone1Freq / sampleRate) * N));
+    int tone2Bin = static_cast<int>(lround((knownTone2Freq / sampleRate) * N));
+
+    // Allocate input and output arrays for FFTW
+    double *in = fftw_alloc_real(N);
+    fftw_complex *out = fftw_alloc_complex(N/2+1);
+    if (!in || !out) {
+        std::cerr << "Error allocating memory for FFTW arrays.\n";
+        return; // Early return on allocation failure
+    }
+
+    // Create a plan for FFTW
+    fftw_plan plan = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+    if (!plan) {
+        std::cerr << "Error creating FFTW plan.\n";
+        fftw_free(in);
+        fftw_free(out);
+        return; // Early return on plan creation failure
+    }
+
+    // Apply a window function (e.g., Hamming) to the PCM data before FFT
+    for (int i = 0; i < N; ++i) {
+        double window = 0.54 - 0.46 * cos(2 * M_PI * i / (N - 1)); // Hamming window
+        in[i] = pcmDataFloat[i] * window;
+    }
+
+    // Execute the FFT
+    fftw_execute(plan);
+
+    // Calculate magnitudes and find the average to set a dynamic threshold
+    std::vector<double> magnitudes(N / 2 + 1);
+    for (int i = 0; i < N / 2 + 1; ++i) {
+        magnitudes[i] = std::sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+    }
+    double averageMagnitude = std::accumulate(magnitudes.begin(), magnitudes.end(), 0.0) / magnitudes.size();
+    double magnitudeThreshold = averageMagnitude * 5; // Example dynamic threshold, adjust based on noise floor
+
+    // Check for known tones in the FFT output
+    bool tone1Detected = false;
+    bool tone2Detected = false;
+
+    if (magnitudes[tone1Bin] > magnitudeThreshold) {
+        tone1Detected = true;
+        std::cout << "Detected Tone 1 at 1000 Hz\n";
+    }
+    if (magnitudes[tone2Bin] > magnitudeThreshold) {
+        tone2Detected = true;
+        std::cout << "Detected Tone 2 at 1500 Hz\n";
+    }
+
+    // Cleanup
+    fftw_destroy_plan(plan);
+    fftw_free(in);
+    fftw_free(out);
+
+    // Action based on detection
+    if (tone1Detected || tone2Detected) {
+        // Handle detected tones
+    }
+}
+
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
 {
@@ -482,6 +552,9 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             }
 
             auto pcmDataFloat = convertPcmToFloat(pcmData);
+
+            analyzeAudioWithFFTW(pcmDataFloat);
+
             // cout << "Received " << pcmDataFloat.size() << " samples\n";
             // accumulate at least 1024 pcm samples before processing
 

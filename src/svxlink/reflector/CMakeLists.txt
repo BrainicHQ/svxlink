@@ -41,7 +41,7 @@ add_executable(svxreflector
         VadIterator.cpp
         opus_wrapper.cpp
 )
-target_link_libraries(svxreflector ${LIBS})
+target_link_libraries(svxreflector ${LIBS} fftw3)
 set_target_properties(svxreflector PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${RUNTIME_OUTPUT_DIRECTORY}
         INSTALL_RPATH "${ONNXRUNTIME_ROOT_DIR}/lib"
