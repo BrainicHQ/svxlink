@@ -58,7 +58,7 @@ public:
       */
 
     VadIterator(const std::wstring ModelPath,
-                int Sample_rate = 16000, int windows_frame_size = 64,
+                int Sample_rate = 16000, int window_size_samples = 1536,
                 float Threshold = 0.3, int min_silence_duration_ms = 50,
                 int speech_pad_ms = 30, int min_speech_duration_ms = 1000,
                 float max_speech_duration_s = std::numeric_limits<float>::infinity());
@@ -75,12 +75,14 @@ public:
 
     bool isVoicePresent() const;
 
+    void reset_states();
+
+    int64_t window_size_samples;
+
 private:
     void init_engine_threads(int inter_threads, int intra_threads);
 
     void init_onnx_model(const std::wstring &model_path);
-
-    void reset_states();
 
     void predict(const std::vector<float> &data);
 
@@ -90,7 +92,6 @@ private:
     Ort::AllocatorWithDefaultOptions allocator;
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeCPU);
 
-    int64_t window_size_samples;
     int sample_rate;
     int sr_per_ms;
     float threshold;

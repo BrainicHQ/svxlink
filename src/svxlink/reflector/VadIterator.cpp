@@ -57,15 +57,13 @@ std::string timestamp_t::format(const char *fmt, ...) {
 }
 
 // Implementation of VadIterator class
-VadIterator::VadIterator(const std::wstring ModelPath, int Sample_rate, int windows_frame_size, float Threshold,
+VadIterator::VadIterator(const std::wstring ModelPath, int Sample_rate, int window_size_samples, float Threshold,
                          int min_silence_duration_ms, int speech_pad_ms, int min_speech_duration_ms,
                          float max_speech_duration_s) {
     init_onnx_model(ModelPath);
     threshold = Threshold;
     sample_rate = Sample_rate;
     sr_per_ms = sample_rate / 1000;
-
-    window_size_samples = windows_frame_size * sr_per_ms;
 
     min_speech_samples = sr_per_ms * min_speech_duration_ms;
     speech_pad_samples = sr_per_ms * speech_pad_ms;
@@ -264,7 +262,7 @@ void VadIterator::predict(const std::vector<float> &data) {
 }
 
 void VadIterator::process(const std::vector<float> &input_wav) {
-    reset_states();
+    // reset_states();
 
     audio_length_samples = input_wav.size();
 
