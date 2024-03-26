@@ -73,7 +73,7 @@ public:
 
     void collect_chunks(const std::vector<float> &input_wav, std::vector<float> &output_wav);
 
-    bool isVoicePresent() const;
+    bool isVoicePresent() const { return voiceDetected; }
 
 private:
     void init_engine_threads(int inter_threads, int intra_threads);
@@ -128,6 +128,7 @@ private:
     std::vector<const char *> output_node_names = {"output", "hn", "cn"};
 
     std::vector<float> accumulationBuffer;
+    bool voiceDetected = false;
 };
 
 #endif // VADITERATOR_H

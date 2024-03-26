@@ -162,6 +162,8 @@ void VadIterator::predict(const std::vector<float> &data) {
 
     // Reset temp_end when > threshold
     if ((speech_prob >= threshold)) {
+        voiceDetected = true;
+        return;
 #ifdef __DEBUG_SPEECH_PROB___
         float speech = current_sample - window_size_samples; // minus window_size_samples to get precise start time point.
             printf("{    start: %.3f s (%.3f) %08d}\n", 1.0 * speech / sample_rate, speech_prob, current_sample- window_size_samples);
@@ -289,9 +291,6 @@ void VadIterator::process(const std::vector<float> &input_wav, std::vector<float
     collect_chunks(input_wav, output_wav);
 }
 
-bool VadIterator::isVoicePresent() const {
-    return !speeches.empty();
-}
 
 void VadIterator::collect_chunks(const std::vector<float> &input_wav, std::vector<float> &output_wav) {
     output_wav.clear();
