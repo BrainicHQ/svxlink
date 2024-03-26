@@ -45,6 +45,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <AsyncUdpSocket.h>
 #include <AsyncApplication.h>
 #include <common.h>
+#include <codecvt>
 
 
 /****************************************************************************
@@ -132,12 +133,8 @@ Reflector::Reflector(void)
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
 
-    initializeVadIterator();
 } /* Reflector::Reflector */
 
-void Reflector::initializeVadIterator() {
-    vadIterator = std::make_unique<VadIterator>(L"/home/silviu/silero-vad/files/silero_vad.onnx");
-}
 
 Reflector::~Reflector(void)
 {
@@ -232,6 +229,38 @@ bool Reflector::initialize(Async::Config &cfg)
     m_http_server->clientDisconnected.connect(
         sigc::mem_fun(*this, &Reflector::httpClientDisconnected));
   }
+
+    m_cfg->getValue("VAD_SETTINGS", "VAD_ENABLED_CALLSIGNS", vadEnabledCallsigns); // Get the list of
+    // callsigns in format "callsign1,callsign2,callsign3"
+    m_cfg->getValue("VAD_SETTINGS", "SILERO_MODEL_PATH", modelPath); // Get the path to the ONNX model
+    // Convert std::string to std::wstring
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring wideModelPath = converter.from_bytes(modelPath);
+    // Now you can pass wideModelPath to a constructor or function that requires std::wstring
+
+    std::string isVadEnabledStr; // Temporary string to hold the value
+    if (m_cfg->getValue("VAD_SETTINGS", "IS_VAD_ENABLED", isVadEnabledStr)) {
+        // Convert the string value to a boolean
+        isVadEnabled = (isVadEnabledStr == "true");
+    } else {
+        // Handle the case where the value could not be retrieved, possibly set a default value
+        isVadEnabled = false; // Default to false or true depending on your application's needs
+    }
+    m_cfg->getValue("VAD_SETTINGS", "SAMPLE_RATE", sampleRate); // Get the sample rate
+    m_cfg->getValue("VAD_SETTINGS", "WINDOW_SIZE_SAMPLES", windowSizeSamples); // Get the sample rate
+    m_cfg->getValue("VAD_SETTINGS", "THRESHOLD", threshold); // Get the threshold value
+    m_cfg->getValue("VAD_SETTINGS", "MIN_SILENCE_DURATION_MS", minSilenceDurationMs); // Get the minimum silence duration in milliseconds
+    m_cfg->getValue("VAD_SETTINGS", "SPEECH_PAD_MS", speechPadMs); // Get the speech padding in milliseconds
+    m_cfg->getValue("VAD_SETTINGS", "MIN_SPEECH_DURATION_MS", minSpeechDurationMs); // Get the minimum speech duration in milliseconds
+    m_cfg->getValue("VAD_SETTINGS", "PROCESSED_SAMPLE_BUFFER_SIZE", sampleBufferSize); // Get the sample buffer size (in samples
+    m_cfg->getValue("VAD_SETTINGS", "VAD_GATE_SAMPLE_SIZE", vadGateSampleSize); // Get the sample buffer size (in samples)
+
+    if(isVadEnabled) {
+    vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,
+                                                windowSizeSamples, threshold,
+                                                minSilenceDurationMs, speechPadMs,
+                                                minSpeechDurationMs);
+    }
 
   return true;
 } /* Reflector::initialize */
@@ -474,45 +503,61 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
         uint32_t tg = TGHandler::instance()->TGForClient(client);
         if (!msg.audioData().empty() && (tg > 0))
         {
-            // Decode the Opus data to PCM format immediately
-            auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
-            if (pcmData.empty()) {
-                std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
-                return; // Skip further processing for this data chunk
-            }
+            // Check if the client's callsign is in the list for VAD processing
+            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
 
-            auto pcmDataFloat = convertPcmToFloat(pcmData);
-
-            // sa aplicam implementarea doar la o lista de clienti (numele) si sa se aplice pentru maxim 2-3 secunde
-
-            // Accumulate floating-point PCM samples for processing
-            pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
-
-            //processed sample count
-            int processedSamples = 0;
-
-            bool voiceDetected = false;
-            while (pcmSampleBuffer.size() >= 7680 && processedSamples < 16000) {
-                std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 7680);
-                vadIterator->process(batchToProcess);
-                processedSamples += 7680;
-                // check if voice is present and the total processed samples does not exceed one second
-                if(vadIterator->isVoicePresent()) {
-                    voiceDetected = true;
-                    break;
+                // Decode the Opus data to PCM format immediately
+                auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
+                if (pcmData.empty()) {
+                    std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
+                    return; // Skip further processing for this data chunk
                 }
-                // Erase the processed samples, leaving any excess in the buffer
-                pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + 7680);
-            }
 
-            // After processing, check if voice is present
-            if (voiceDetected)
-            {
-                // std::cout << "Voice detected\n";
+                auto pcmDataFloat = convertPcmToFloat(pcmData);
 
-                ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-                if (talker == 0)
-                {
+                // Accumulate floating-point PCM samples for processing
+                pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+
+                //processed sample count
+                int processedSamples = 0;
+
+                bool voiceDetected = false;
+                while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize) {
+                    std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
+                    vadIterator->process(batchToProcess);
+                    processedSamples += sampleBufferSize;
+                    // check if voice is present and the total processed samples does not exceed one second
+                    if (vadIterator->isVoicePresent()) {
+                        voiceDetected = true;
+                        pcmSampleBuffer.clear(); // Clear the buffer to avoid further processing of the same data chunk
+                        break;
+                    }
+                    // Erase the processed samples, leaving any excess in the buffer
+                    pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
+                }
+
+                // After processing, check if voice is present
+                if (voiceDetected) {
+                    // std::cout << "Voice detected\n";
+
+                    ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
+                    if (talker == 0) {
+                        TGHandler::instance()->setTalkerForTG(tg, client);
+                        talker = TGHandler::instance()->talkerForTG(tg);
+                    }
+                    if (talker == client) {
+                        TGHandler::instance()->setTalkerForTG(tg, client);
+                        broadcastUdpMsg(msg,
+                                        ReflectorClient::mkAndFilter(
+                                                ReflectorClient::ExceptFilter(client),
+                                                ReflectorClient::TgFilter(tg)));
+                    }
+
+                }
+            } else {
+                // If the client's callsign is not in the list, forward the audio data as usual
+                ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
+                if (talker == 0) {
                     TGHandler::instance()->setTalkerForTG(tg, client);
                     talker = TGHandler::instance()->talkerForTG(tg);
                 }

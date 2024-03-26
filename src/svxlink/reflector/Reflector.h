@@ -216,9 +216,20 @@ class Reflector : public sigc::trackable
     void onRequestAutoQsy(uint32_t from_tg);
     uint32_t nextRandomQsyTg(void);
 
-    void initializeVadIterator();
     std::unique_ptr<VadIterator> vadIterator;
     std::vector<float> pcmSampleBuffer;
+    // Define the list of callsigns for which VAD should be applied
+    std::set<std::string> vadEnabledCallsigns;
+    std::string modelPath;
+    int sampleRate;
+    int windowSizeSamples;
+    float threshold;
+    int minSilenceDurationMs;
+    int speechPadMs;
+    int minSpeechDurationMs;
+    bool isVadEnabled = false;
+    int sampleBufferSize = 7680;
+    int vadGateSampleSize = 16000;
 };  /* class Reflector */
 
 
