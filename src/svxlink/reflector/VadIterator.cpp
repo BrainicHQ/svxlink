@@ -57,27 +57,28 @@ std::string timestamp_t::format(const char *fmt, ...) {
 }
 
 // Implementation of VadIterator class
-VadIterator::VadIterator(const std::wstring ModelPath, int Sample_rate, int window_size_samples, float Threshold,
+VadIterator::VadIterator(const std::wstring ModelPath, int Sample_rate, int64_t window_size_samples, float Threshold,
                          int min_silence_duration_ms, int speech_pad_ms, int min_speech_duration_ms,
-                         float max_speech_duration_s) {
+                         float max_speech_duration_s)
+        : window_size_samples(window_size_samples), // Initialize sample_rate with Sample_rate
+          sample_rate(Sample_rate), // Initialize window_size_samples with window_size_samples
+          sr_per_ms(Sample_rate / 1000), // Initialize threshold with Threshold
+          threshold(Threshold), // Calculate sr_per_ms based on Sample_rate
+          min_silence_samples(sr_per_ms * min_silence_duration_ms), // Calculate min_speech_samples
+          min_silence_samples_at_max_speech(sr_per_ms * 98), // Calculate speech_pad_samples
+          min_speech_samples(sr_per_ms * min_speech_duration_ms), // Calculate min_silence_samples
+          max_speech_samples(Sample_rate * max_speech_duration_s - window_size_samples - 2 * speech_pad_samples), // Initialize min_silence_samples_at_max_speech
+          speech_pad_samples(sr_per_ms * speech_pad_ms) // Calculate max_speech_samples
+{
     init_onnx_model(ModelPath);
-    threshold = Threshold;
-    sample_rate = Sample_rate;
-    sr_per_ms = sample_rate / 1000;
 
-    min_speech_samples = sr_per_ms * min_speech_duration_ms;
-    speech_pad_samples = sr_per_ms * speech_pad_ms;
-
-    max_speech_samples = sample_rate * max_speech_duration_s - window_size_samples - 2 * speech_pad_samples;
-
-    min_silence_samples = sr_per_ms * min_silence_duration_ms;
-    min_silence_samples_at_max_speech = sr_per_ms * 98;
-
+    // Since input, _h, _c, and sr are likely std::vector or similar, their sizes can't be set in the initializer list,
+    // but you can resize them immediately after in the constructor body.
     input.resize(window_size_samples);
     input_node_dims[0] = 1;
     input_node_dims[1] = window_size_samples;
 
-    _h.resize(size_hc);
+    _h.resize(size_hc); // Assuming size_hc is already set correctly before this constructor is called
     _c.resize(size_hc);
     sr.resize(1);
     sr[0] = sample_rate;

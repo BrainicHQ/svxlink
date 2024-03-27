@@ -222,7 +222,7 @@ class Reflector : public sigc::trackable
     std::set<std::string> vadEnabledCallsigns;
     std::string modelPath;
     int sampleRate;
-    int windowSizeSamples;
+    int64_t windowSizeSamples;
     float threshold;
     int minSilenceDurationMs;
     int speechPadMs;
@@ -230,6 +230,7 @@ class Reflector : public sigc::trackable
     bool isVadEnabled = false;
     int sampleBufferSize = 7680;
     int vadGateSampleSize = 16000;
+    bool currentTalkerVoiceDetected = false;
 };  /* class Reflector */
 
 

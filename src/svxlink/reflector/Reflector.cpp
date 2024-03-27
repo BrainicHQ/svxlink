@@ -503,8 +503,8 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
         uint32_t tg = TGHandler::instance()->TGForClient(client);
         if (!msg.audioData().empty() && (tg > 0))
         {
-            // Check if the client's callsign is in the list for VAD processing
-            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
+            // Only enter this block if VAD is enabled, the callsign is in the list, and voice has not been detected yet.
+            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end() && !currentTalkerVoiceDetected) {
 
                 // Decode the Opus data to PCM format immediately
                 auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
@@ -521,14 +521,13 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                 //processed sample count
                 int processedSamples = 0;
 
-                bool voiceDetected = false;
                 while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize) {
                     std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
                     vadIterator->process(batchToProcess);
                     processedSamples += sampleBufferSize;
                     // check if voice is present and the total processed samples does not exceed one second
                     if (vadIterator->isVoicePresent()) {
-                        voiceDetected = true;
+                        currentTalkerVoiceDetected = true;
                         pcmSampleBuffer.clear(); // Clear the buffer to avoid further processing of the same data chunk
                         break;
                     }
@@ -537,7 +536,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                 }
 
                 // After processing, check if voice is present
-                if (voiceDetected) {
+                if (currentTalkerVoiceDetected) {
                     // std::cout << "Voice detected\n";
 
                     ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
@@ -698,6 +697,7 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
   }
   if (new_talker != 0)
   {
+      currentTalkerVoiceDetected = false;
     cout << new_talker->callsign() << ": Talker start on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStart(tg, new_talker->callsign()),
         ReflectorClient::mkAndFilter(

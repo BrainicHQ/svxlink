@@ -58,7 +58,7 @@ public:
       */
 
     VadIterator(const std::wstring ModelPath,
-                int Sample_rate = 16000, int window_size_samples = 1536,
+                int Sample_rate = 16000, int64_t window_size_samples = 1536,
                 float Threshold = 0.3, int min_silence_duration_ms = 50,
                 int speech_pad_ms = 30, int min_speech_duration_ms = 1000,
                 float max_speech_duration_s = std::numeric_limits<float>::infinity());
