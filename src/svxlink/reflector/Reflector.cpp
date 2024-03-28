@@ -504,40 +504,48 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
         if (!msg.audioData().empty() && (tg > 0))
         {
             // Only enter this block if VAD is enabled, the callsign is in the list, and voice has not been detected yet.
-            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end() && !currentTalkerVoiceDetected) {
+            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
 
-                // Decode the Opus data to PCM format immediately
-                auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
-                if (pcmData.empty()) {
-                    std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
-                    return; // Skip further processing for this data chunk
-                }
+                if(!currentTalkerVoiceDetected) { // If voice has not been detected yet
 
-                auto pcmDataFloat = convertPcmToFloat(pcmData);
-
-                // Accumulate floating-point PCM samples for processing
-                pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
-
-                //processed sample count
-                int processedSamples = 0;
-
-                while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize) {
-                    std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
-                    vadIterator->process(batchToProcess);
-                    processedSamples += sampleBufferSize;
-                    // check if voice is present and the total processed samples does not exceed one second
-                    if (vadIterator->isVoicePresent()) {
-                        currentTalkerVoiceDetected = true;
-                        pcmSampleBuffer.clear(); // Clear the buffer to avoid further processing of the same data chunk
-                        break;
+                    // Decode the Opus data to PCM format immediately
+                    auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
+                    if (pcmData.empty()) {
+                        std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
+                        return; // Skip further processing for this data chunk
                     }
-                    // Erase the processed samples, leaving any excess in the buffer
-                    pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
+
+                    auto pcmDataFloat = convertPcmToFloat(pcmData);
+
+                    // Accumulate floating-point PCM samples for processing
+                    pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+
+                    //processed sample count
+                    int processedSamples = 0;
+
+                    //clone msg.audioData() to a temporary vector
+                    std::vector<float> tempAudioData(msg.audioData().begin(), msg.audioData().end());
+
+                    while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize) {
+                        std::vector<float> batchToProcess(pcmSampleBuffer.begin(),
+                                                          pcmSampleBuffer.begin() + sampleBufferSize);
+                        vadIterator->process(batchToProcess);
+                        processedSamples += sampleBufferSize;
+                        // check if voice is present and the total processed samples does not exceed one second
+                        if (vadIterator->isVoicePresent()) {
+                            std::cout<<"Voice detected, end\n";
+                            currentTalkerVoiceDetected = true;
+                            pcmSampleBuffer.clear(); // Clear the buffer to avoid further processing of the same data chunk
+                            break;
+                        }
+                        // Erase the processed samples, leaving any excess in the buffer
+                        pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
+                    }
                 }
 
                 // After processing, check if voice is present
                 if (currentTalkerVoiceDetected) {
-                    // std::cout << "Voice detected\n";
+                     // std::cout << "Voice detected " << currentTalkerVoiceDetected << std::endl;
 
                     ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
                     if (talker == 0) {
@@ -677,6 +685,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
 void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
                                 ReflectorClient *new_talker)
 {
+    currentTalkerVoiceDetected = false;
   if (old_talker != 0)
   {
     cout << old_talker->callsign() << ": Talker stop on TG #" << tg << endl;
@@ -697,7 +706,6 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
   }
   if (new_talker != 0)
   {
-      currentTalkerVoiceDetected = false;
     cout << new_talker->callsign() << ": Talker start on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStart(tg, new_talker->callsign()),
         ReflectorClient::mkAndFilter(

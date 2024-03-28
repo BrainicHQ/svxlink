@@ -151,10 +151,10 @@ void VadIterator::predict(const std::vector<float> &data) {
     auto now_c = std::chrono::system_clock::to_time_t(now);
     auto localTime = std::localtime(&now_c);
 
-    // print only when speech_prob > 10%
-    if (speech_prob * 100 > 10)
+    // print only when speech_prob >= threshold
+    if (speech_prob >= threshold)
     {
-        std::cout << "current time: " << std::put_time(localTime, "%H:%M:%S") << " speech_prob: " << speech_prob * 100
+        std::cout << "Voice detected at " << std::put_time(localTime, "%H:%M:%S") << " - probability: " << speech_prob * 100
                   << "% lastMaxAmplitude: " << lastMaxAmplitude << std::endl;
     }
 
@@ -164,7 +164,6 @@ void VadIterator::predict(const std::vector<float> &data) {
     // Reset temp_end when > threshold
     if ((speech_prob >= threshold)) {
         voiceDetected = true;
-        return;
 #ifdef __DEBUG_SPEECH_PROB___
         float speech = current_sample - window_size_samples; // minus window_size_samples to get precise start time point.
             printf("{    start: %.3f s (%.3f) %08d}\n", 1.0 * speech / sample_rate, speech_prob, current_sample- window_size_samples);
@@ -266,6 +265,7 @@ void VadIterator::predict(const std::vector<float> &data) {
 
 void VadIterator::process(const std::vector<float> &input_wav) {
     reset_states();
+    voiceDetected = false;
 
     audio_length_samples = input_wav.size();
 
