@@ -425,16 +425,23 @@ std::vector<float> convertPcmToFloat(const std::vector<short>& pcmData) {
 
 void Reflector::broadcastIfCurrentTalker(ReflectorClient* client, uint32_t tg, const MsgUdpAudio& msg) {
     ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
-    if (talker == nullptr) { // If there's no current talker for the TG
+    if (talker == 0) { // If there's no current talker for the TG
         TGHandler::instance()->setTalkerForTG(tg, client); // Set the current client as the talker
-        talker = client;
+        talker = TGHandler::instance()->talkerForTG(tg);
     }
     if (talker == client) { // Ensure the current client is the talker before broadcasting
+        TGHandler::instance()->setTalkerForTG(tg, client);
         broadcastUdpMsg(msg,
                         ReflectorClient::mkAndFilter(
                                 ReflectorClient::ExceptFilter(client),
                                 ReflectorClient::TgFilter(tg)));
     }
+}
+
+void Reflector::resetVadStates() {
+    currentTalkerVoiceDetected = false;
+    processedSamples = 0;
+    pcmSampleBuffer.clear(); // Clear any accumulated samples
 }
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
@@ -520,10 +527,9 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             // Only enter this block if VAD is enabled, the callsign is in the list, and voice has not been detected yet.
             if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
 
-                // Always append incoming audio data to the preVoiceBuffer
-                preVoiceBuffer.push_back(msg);
-
                 if(!currentTalkerVoiceDetected) { // If voice has not been detected yet
+                    // Always append incoming audio data to the preVoiceBuffer
+                    preVoiceBuffer.push_back(msg);
 
                     // Decode the Opus data to PCM format immediately
                     auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
@@ -557,20 +563,23 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                 }
                                 preVoiceBuffer.clear();
                             }
-                            break;
+                            return;
                         }
 
                         pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + sampleBufferSize);
                     }
-                }
 
-                // After processing, check if voice is present
-                if (currentTalkerVoiceDetected) {
-                     // std::cout << "Voice detected " << currentTalkerVoiceDetected << std::endl;
+                    return; // Skip further processing for this data chunk
+
+                } else {
+                    std::cout << "Voice detected, broadcasting\n";
+                    // If voice has been detected, broadcast the audio data immediately
                     broadcastIfCurrentTalker(client, tg, msg);
                 }
+
+
             } else {
-                // If the client's callsign is not in the list, forward the audio data as usual
+                // If the callsign is not in the list or VAD is not enabled, broadcast the audio data immediately
                 broadcastIfCurrentTalker(client, tg, msg);
             }
         }
@@ -680,12 +689,9 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
 void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
                                 ReflectorClient *new_talker)
 {
-    currentTalkerVoiceDetected = false;
-    processedSamples = 0;
-    pcmSampleBuffer.clear(); // Clear any accumulated samples
-
   if (old_talker != 0)
   {
+      resetVadStates();
     cout << old_talker->callsign() << ": Talker stop on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStop(tg, old_talker->callsign()),
         ReflectorClient::mkAndFilter(
@@ -704,6 +710,7 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
   }
   if (new_talker != 0)
   {
+      resetVadStates();
     cout << new_talker->callsign() << ": Talker start on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStart(tg, new_talker->callsign()),
         ReflectorClient::mkAndFilter(
