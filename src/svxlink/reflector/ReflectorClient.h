@@ -426,7 +426,8 @@ class ReflectorClient
 
     const Json::Value& nodeInfo(void) const { return m_node_info; }
 
-  private:
+    bool voiceDetected = false;
+private:
     using ClientIdRandomDist  = std::uniform_int_distribution<ClientId>;
     using ClientMap           = std::map<ClientId, ReflectorClient*>;
 

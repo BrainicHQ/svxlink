@@ -230,7 +230,6 @@ class Reflector : public sigc::trackable
     bool isVadEnabled = false;
     size_t sampleBufferSize = 7680;
     size_t vadGateSampleSize = 16000;
-    bool currentTalkerVoiceDetected = false;
     std::vector<MsgUdpAudio> preVoiceBuffer;
     size_t processedSamples = 0;
 
