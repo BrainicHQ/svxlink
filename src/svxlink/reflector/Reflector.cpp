@@ -548,6 +548,8 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                         vadIterator->process(batchToProcess);
                         processedSamples += sampleBufferSize;
 
+                        std::cout<< client->callsign() << " voice detected :" << client->voiceDetected << std::endl;
+
                         if (vadIterator->isVoicePresent())
                         {
                             std::cout << "Voice detected, end\n";
@@ -569,19 +571,10 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                         pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + static_cast<std::vector<float>::difference_type>(sampleBufferSize));
                     }
 
-                    if (processedSamples >= vadGateSampleSize && !client->voiceDetected) {
-                        std::cout << "Voice not detected, end\n" << processedSamples << std::endl;
-                        // If voice has not been detected, send an empty audio data message
-                        // clear the pre-voice buffer and broadcast the empty audio data message
-                        MsgUdpAudio emptyMsg;
-                        broadcastIfCurrentTalker(client, tg, emptyMsg);
-                        msg.audioData().clear();
-                    }
-
                     break; // Skip further processing for this data chunk
 
                 } else if (client->voiceDetected) {
-                    std::cout << "Voice detected, broadcasting\n";
+                    // std::cout << "Voice detected, broadcasting\n";
                     // If voice has been detected, broadcast the audio data immediately
                     broadcastIfCurrentTalker(client, tg, msg);
                 }
@@ -592,6 +585,21 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                 broadcastIfCurrentTalker(client, tg, msg);
             }
         }
+        // to check if the transmission stopped and voice is not detected then send the empty audio data
+
+          if (processedSamples >= vadGateSampleSize && !client->voiceDetected) {
+              // std::cout << "Voice not detected, end\n" << processedSamples << std::endl;
+              // If voice has not been detected, send an empty audio data message
+              // clear the pre-voice buffer and broadcast the empty audio data message
+              MsgUdpAudio emptyMsg;
+              broadcastIfCurrentTalker(client, tg, emptyMsg);
+              msg.audioData().clear();
+
+              // also try to reset the talker
+              // TGHandler::instance()->setTalkerForTG(tg, 0); // Reset the talker for the TG
+              // client->sendUdpMsg(MsgUdpAllSamplesFlushed()); // Send the flush message to the client
+          }
+
       }
       break;
     }
