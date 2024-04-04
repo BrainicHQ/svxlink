@@ -441,6 +441,7 @@ void Reflector::broadcastIfCurrentTalker(ReflectorClient* client, uint32_t tg, c
 void Reflector::resetVadStates() {
     processedSamples = 0;
     pcmSampleBuffer.clear(); // Clear any accumulated samples
+    preVoiceBuffer.clear(); // Clear the pre-voice buffer
 }
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
