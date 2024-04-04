@@ -729,7 +729,7 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
   if (new_talker != 0)
   {
       //resetVadStates();
-      new_talker->voiceDetected = false;
+      // new_talker->voiceDetected = false;
     cout << new_talker->callsign() << ": Talker start on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStart(tg, new_talker->callsign()),
         ReflectorClient::mkAndFilter(
