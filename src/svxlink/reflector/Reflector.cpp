@@ -592,9 +592,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
               // std::cout << "Voice not detected, end\n" << processedSamples << std::endl;
               // If voice has not been detected, send an empty audio data message
               // clear the pre-voice buffer and broadcast the empty audio data message
-              MsgUdpAudio emptyMsg;
-              broadcastIfCurrentTalker(client, tg, emptyMsg);
-              msg.audioData().clear();
+              //MsgUdpAudio emptyMsg;
+              //broadcastIfCurrentTalker(client, tg, emptyMsg);
+              //msg.audioData().clear();
+              client->disconnect();
+              resetVadStates();
+              return;
 
               // also try to reset the talker
               // TGHandler::instance()->setTalkerForTG(tg, 0); // Reset the talker for the TG
