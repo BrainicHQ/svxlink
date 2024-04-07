@@ -7,11 +7,12 @@ image:https://badges.gitter.im/Join%20Chat.svg[link="https://gitter.im/sm0svx/sv
 
 == Anti Kerchunking VAD (Voice Activity Detection) Feature ==
 
-In this fork of the SvxLink project, we introduce an innovative Voice Activity Detection (VAD) functionality, specifically designed to enhance the user experience and operational efficiency for repeater and simplex channel operations. This feature adeptly addresses the prevalent issue of "kerchunking"—the act of unintentionally keying up a transmitter without transmitting meaningful voice communication, which leads to unnecessary repeater use and potential interference.
+This fork of the SvxLink project introduces an innovative Voice Activity Detection (VAD) functionality, specifically designed to enhance the user experience and operational efficiency for repeater and simplex channel operations. This feature adeptly addresses the prevalent issue of "kerchunking"—the act of unintentionally keying up a transmitter without transmitting meaningful voice communication, which leads to unnecessary repeater use and potential interference.
 
 This addition represents a significant enhancement to the SvxLink project, leveraging sophisticated machine learning models to discern between intentional voice communications and unintentional or noise-induced transmissions. By doing so, it not only optimizes bandwidth usage but also ensures clearer and more reliable communication channels for the ham radio community.
 
 Note: This feature is a unique contribution to my fork of the SvxLink project, aimed at providing advanced, user-friendly voice services to the amateur radio community. For the latest updates, features, and contributions beyond the original SvxLink functionalities, please refer to this repository.
+
 === Implementation ===
 
 The VAD feature is implemented using a sophisticated machine learning model, leveraging the ONNX runtime for efficient real-time audio processing. This model analyzes incoming audio streams to detect the presence of human speech with high accuracy, thereby enabling the system to differentiate between intentional voice communication and unintentional transmissions or background noise.
@@ -22,6 +23,7 @@ Key components of the VAD implementation include:
 - PCM to Float Conversion: Transforms PCM audio data into floating-point format, normalizing the audio samples for consistent processing.
 - Machine Learning Model: A pre-trained ONNX model that evaluates audio data to determine the presence of voice activity.
 - Dynamic Thresholding: Utilizes a configurable threshold to determine voice activity, allowing for fine-tuning based on environmental conditions and user preferences.
+
 === Benefits ===
 
 Integrating VAD into SvxLink provides several key benefits:
@@ -76,6 +78,7 @@ This Anti Kerchunking VAD feature is a unique contribution by Silviu Stroe (YO6S
 The development and integration of this feature reflect https://github.com/sm0svx/svxlink/issues/661[my commitment] to enhancing the amateur radio community's experience and operational efficiency and *the main reason of getting me as a licensed radio amateur*.
 
 Thanks for the testers that helped me in testing the feature during the development process: YO3DEL (Dan N.), YO6NAM (Răzvan M.)
+___
 
 == SvxLink Server ==
 The SvxLink Server is a general purpose voice services system, which when
