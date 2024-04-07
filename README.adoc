@@ -78,7 +78,8 @@ This Anti Kerchunking VAD feature is a unique contribution by Silviu Stroe (YO6S
 The development and integration of this feature reflect https://github.com/sm0svx/svxlink/issues/661[my commitment] to enhancing the amateur radio community's experience and operational efficiency and *the main reason of getting me as a licensed radio amateur*.
 
 Thanks for the testers that helped me in testing the feature during the development process: YO3DEL (Dan N.), YO6NAM (Răzvan M.)
-___
+
+---
 
 == SvxLink Server ==
 The SvxLink Server is a general purpose voice services system, which when
