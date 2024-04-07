@@ -60,7 +60,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 #include "ProtoVer.h"
 #include "ReflectorClient.h"
-
+#include "VadIterator.h"
 
 /****************************************************************************
  *
@@ -220,6 +220,23 @@ class Reflector : public sigc::trackable
     void ctrlPtyDataReceived(const void *buf, size_t count);
     void cfgUpdated(const std::string& section, const std::string& tag);
 
+    std::unique_ptr<VadIterator> vadIterator;
+    std::vector<float> pcmSampleBuffer;
+    // Define the list of callsigns for which VAD should be applied
+    std::set<std::string> vadEnabledCallsigns;
+    std::string modelPath;
+    int sampleRate;
+    int64_t windowSizeSamples;
+    float threshold;
+    bool isVadEnabled = false;
+    size_t sampleBufferSize = 7680;
+    size_t vadGateSampleSize = 16000;
+    std::vector<MsgUdpAudio> preVoiceBuffer;
+    size_t processedSamples = 0;
+
+    void broadcastIfCurrentTalker(ReflectorClient *client, uint32_t tg, const MsgUdpAudio &msg);
+
+    void resetVadStates();
 };  /* class Reflector */
 
 

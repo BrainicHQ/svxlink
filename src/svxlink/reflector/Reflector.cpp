@@ -4,6 +4,8 @@
 @author  Tobias Blomberg / SM0SVX
 @date	 2017-02-11
 
+Additional VAD functionality added by Silviu Stroe (www.brainic.io) in 2024.
+
 \verbatim
 SvxReflector - An audio reflector for connecting SvxLink Servers
 Copyright (C) 2003-2024 Tobias Blomberg / SM0SVX
@@ -46,6 +48,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include <AsyncApplication.h>
 #include <AsyncPty.h>
 #include <common.h>
+#include <codecvt>
 
 
 /****************************************************************************
@@ -57,6 +60,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #include "Reflector.h"
 #include "ReflectorClient.h"
 #include "TGHandler.h"
+#include "opus_wrapper.h"
+#include "VadIterator.h"
 
 
 /****************************************************************************
@@ -130,6 +135,7 @@ Reflector::Reflector(void)
       mem_fun(*this, &Reflector::onTalkerUpdated));
   TGHandler::instance()->requestAutoQsy.connect(
       mem_fun(*this, &Reflector::onRequestAutoQsy));
+
 } /* Reflector::Reflector */
 
 
@@ -229,6 +235,7 @@ bool Reflector::initialize(Async::Config &cfg)
         sigc::mem_fun(*this, &Reflector::httpClientDisconnected));
   }
 
+<<<<<<< HEAD
     // Path for command PTY
   string pty_path;
   m_cfg->getValue("GLOBAL", "COMMAND_PTY", pty_path);
@@ -248,6 +255,34 @@ bool Reflector::initialize(Async::Config &cfg)
   }
 
   m_cfg->valueUpdated.connect(sigc::mem_fun(*this, &Reflector::cfgUpdated));
+=======
+    m_cfg->getValue("VAD_SETTINGS", "VAD_ENABLED_CALLSIGNS", vadEnabledCallsigns); // Get the list of
+    // callsigns in format "callsign1,callsign2,callsign3"
+    m_cfg->getValue("VAD_SETTINGS", "SILERO_MODEL_PATH", modelPath); // Get the path to the ONNX model
+    // Convert std::string to std::wstring
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring wideModelPath = converter.from_bytes(modelPath);
+    // Now you can pass wideModelPath to a constructor or function that requires std::wstring
+
+    std::string isVadEnabledStr; // Temporary string to hold the value
+    if (m_cfg->getValue("VAD_SETTINGS", "IS_VAD_ENABLED", isVadEnabledStr)) {
+        // Convert the string value to a boolean
+        isVadEnabled = (isVadEnabledStr == "true");
+    } else {
+        // Handle the case where the value could not be retrieved, possibly set a default value
+        isVadEnabled = false; // Default to false or true depending on your application's needs
+    }
+    m_cfg->getValue("VAD_SETTINGS", "SAMPLE_RATE", sampleRate); // Get the sample rate
+    m_cfg->getValue("VAD_SETTINGS", "WINDOW_SIZE_SAMPLES", windowSizeSamples); // Get the sample rate
+    m_cfg->getValue("VAD_SETTINGS", "THRESHOLD", threshold); // Get the threshold value
+    m_cfg->getValue("VAD_SETTINGS", "PROCESSED_SAMPLE_BUFFER_SIZE", sampleBufferSize); // Get the sample buffer size (in samples
+    m_cfg->getValue("VAD_SETTINGS", "VAD_GATE_SAMPLE_SIZE", vadGateSampleSize); // Get the sample buffer size (in samples)
+
+    if(isVadEnabled) {
+    vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,
+                                                windowSizeSamples, threshold);
+    }
+>>>>>>> origin/silero-clean
 
   return true;
 } /* Reflector::initialize */
@@ -383,6 +418,53 @@ void Reflector::clientDisconnected(Async::FramedTcpConnection *con,
   Application::app().runTask([=]{ delete client; });
 } /* Reflector::clientDisconnected */
 
+std::vector<opus_int16> decodeOpusData(const std::vector<uint8_t>& opusData, int frame_size) {
+    // Initialize the Opus decoder
+    opus::Decoder decoder(16000, 1);
+    if (!decoder.valid()) {
+        std::cerr << "Failed to initialize Opus decoder." << std::endl;
+        return {};
+    }
+
+    // Decode the Opus data to PCM format
+    auto pcmData = decoder.Decode({opusData}, frame_size, false);
+    if (pcmData.empty()) {
+        std::cerr << "Decoding failed or no data was decoded." << std::endl;
+        return {};
+    }
+
+    return pcmData;
+}
+
+std::vector<float> convertPcmToFloat(const std::vector<short>& pcmData) {
+    std::vector<float> floatData(pcmData.size());
+    for (size_t i = 0; i < pcmData.size(); ++i) {
+        // Normalize the PCM data to the range [-1.0, 1.0]
+        floatData[i] = pcmData[i] / 32768.0f;
+    }
+    return floatData;
+}
+
+void Reflector::broadcastIfCurrentTalker(ReflectorClient* client, uint32_t tg, const MsgUdpAudio& msg) {
+    ReflectorClient *talker = TGHandler::instance()->talkerForTG(tg);
+    if (talker == 0) { // If there's no current talker for the TG
+        TGHandler::instance()->setTalkerForTG(tg, client); // Set the current client as the talker
+        talker = TGHandler::instance()->talkerForTG(tg);
+    }
+    if (talker == client) { // Ensure the current client is the talker before broadcasting
+        TGHandler::instance()->setTalkerForTG(tg, client);
+        broadcastUdpMsg(msg,
+                        ReflectorClient::mkAndFilter(
+                                ReflectorClient::ExceptFilter(client),
+                                ReflectorClient::TgFilter(tg)));
+    }
+}
+
+void Reflector::resetVadStates() {
+    processedSamples = 0;
+    pcmSampleBuffer.clear(); // Clear any accumulated samples
+    preVoiceBuffer.clear(); // Clear the pre-voice buffer
+}
 
 void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                                     void *buf, int count)
@@ -464,27 +546,72 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
         uint32_t tg = TGHandler::instance()->TGForClient(client);
         if (!msg.audioData().empty() && (tg > 0))
         {
-          ReflectorClient* talker = TGHandler::instance()->talkerForTG(tg);
-          if (talker == 0)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            talker = TGHandler::instance()->talkerForTG(tg);
-          }
-          if (talker == client)
-          {
-            TGHandler::instance()->setTalkerForTG(tg, client);
-            broadcastUdpMsg(msg,
-                ReflectorClient::mkAndFilter(
-                  ReflectorClient::ExceptFilter(client),
-                  ReflectorClient::TgFilter(tg)));
-            //broadcastUdpMsgExcept(tg, client, msg,
-            //    ProtoVerRange(ProtoVer(0, 6),
-            //                  ProtoVer(1, ProtoVer::max().minor())));
-            //MsgUdpAudio msg_v2(msg);
-            //broadcastUdpMsgExcept(tg, client, msg_v2,
-            //    ProtoVerRange(ProtoVer(2, 0), ProtoVer::max()));
-          }
+            // Only enter this block if VAD is enabled, the callsign is in the list, and voice has not been detected yet.
+            if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
+
+                if(processedSamples < vadGateSampleSize && !client->voiceDetected) {
+                    // Always append incoming audio data to the preVoiceBuffer to not lose any data until voice is detected
+                    preVoiceBuffer.push_back(msg);
+
+                    // Decode the Opus data to PCM format immediately
+                    auto pcmData = decodeOpusData(msg.audioData(), 320); // Assuming frame_size is 320
+                    if (pcmData.empty()) {
+                        std::cerr << "Decoding failed or returned no data. Skipping this audio data.\n";
+                        return; // Skip further processing for this data chunk
+                    }
+
+                    auto pcmDataFloat = convertPcmToFloat(pcmData);
+
+                    // Accumulate floating-point PCM samples for processing
+                    pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+
+                    while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize && !client->voiceDetected)
+                    {
+                        std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + static_cast<std::vector<float>::difference_type>(sampleBufferSize));
+                        vadIterator->process(batchToProcess);
+                        processedSamples += sampleBufferSize;
+
+                        if (vadIterator->isVoicePresent())
+                        {
+                            std::cout << "Voice detected, end\n";
+                            client->voiceDetected = true;
+
+                            // Broadcast the pre-voice buffer here
+                            if (!preVoiceBuffer.empty())
+                            {
+                                for (auto& bufferedMsg : preVoiceBuffer) {
+                                    // Process or broadcast each MsgUdpAudio object
+                                    broadcastIfCurrentTalker(client, tg, bufferedMsg);
+                                }
+                                preVoiceBuffer.clear();
+                                msg.audioData().clear();
+                            }
+                            break;
+                        }
+
+                        pcmSampleBuffer.erase(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + static_cast<std::vector<float>::difference_type>(sampleBufferSize));
+                    }
+
+                    break; // Skip further processing for this data chunk
+
+                } else if (client->voiceDetected) {
+                    // If voice has been detected, broadcast the audio data immediately
+                    broadcastIfCurrentTalker(client, tg, msg);
+                }
+
+
+            } else {
+                // If the callsign is not in the list or VAD is not enabled, broadcast the audio data immediately
+                broadcastIfCurrentTalker(client, tg, msg);
+            }
         }
+          // If the processed samples exceed the VAD gate sample size and voice has not been detected, disconnect the client
+          if (processedSamples >= vadGateSampleSize && !client->voiceDetected) {
+              client->disconnect();
+              resetVadStates();
+              return;
+          }
+
       }
       break;
     }
@@ -593,6 +720,8 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
 {
   if (old_talker != 0)
   {
+      resetVadStates();
+      old_talker->voiceDetected = false;
     cout << old_talker->callsign() << ": Talker stop on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStop(tg, old_talker->callsign()),
         ReflectorClient::mkAndFilter(

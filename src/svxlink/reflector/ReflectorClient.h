@@ -426,7 +426,11 @@ class ReflectorClient
 
     const Json::Value& nodeInfo(void) const { return m_node_info; }
 
-  private:
+    bool voiceDetected = false;
+
+    void disconnect(void);
+
+private:
     using ClientIdRandomDist  = std::uniform_int_distribution<ClientId>;
     using ClientMap           = std::map<ClientId, ReflectorClient*>;
 
@@ -488,7 +492,7 @@ class ReflectorClient
     void handleMsgError(std::istream& is);
     void sendError(const std::string& msg);
     void onDiscTimeout(Async::Timer *t);
-    void disconnect(void);
+
     void handleHeartbeat(Async::Timer *t);
     std::string lookupUserKey(const std::string& callsign);
 
