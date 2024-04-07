@@ -11,7 +11,8 @@ This fork of the SvxLink project introduces an innovative Voice Activity Detecti
 
 This addition represents a significant enhancement to the SvxLink project, leveraging sophisticated machine learning models to discern between intentional voice communications and unintentional or noise-induced transmissions. By doing so, it not only optimizes bandwidth usage but also ensures clearer and more reliable communication channels for the ham radio community.
 
-Note: This feature is a unique contribution to my fork of the SvxLink project, aimed at providing advanced, user-friendly voice services to the amateur radio community. For the latest updates, features, and contributions beyond the original SvxLink functionalities, please refer to this repository.
+Note: This feature is my unique contribution to the SvxLink project, providing advanced, user-friendly voice activity detection for the amateur radio community’s benefit.
+
 
 === Implementation ===
 
@@ -32,8 +33,6 @@ Integrating VAD into SvxLink provides several key benefits:
 - Enhanced Audio Quality: Minimizes the transmission of background noise and other non-speech elements, resulting in clearer communication channels.
 - Improved User Experience: Reduces the occurrence of unintentional transmissions, ensuring that the repeater is available for meaningful communications.
 - Operational Efficiency: Automates the process of monitoring and managing voice transmissions, reducing the need for manual intervention by repeater operators.
-
-This feature represents a significant step forward in the SvxLink project's commitment to providing advanced, user-friendly voice services to the ham radio community. By leveraging cutting-edge machine learning technology, SvxLink continues to innovate in the field of amateur radio communications, setting new standards for performance and reliability.
 
 === Installation ===
 1. Download the Silero VAD model file from the official repository: https://github.com/snakers4/silero-vad/blob/master/files/silero_vad.onnx
