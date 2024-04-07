@@ -4,9 +4,78 @@ SvxLink
 image:https://travis-ci.org/sm0svx/svxlink.svg?branch=master["Build Status", link="https://travis-ci.org/sm0svx/svxlink"]
 image:https://badges.gitter.im/Join%20Chat.svg[link="https://gitter.im/sm0svx/svxlink?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"]
 
-SvxLink is a project that develops software targeting the ham radio community.
-It started out as an EchoLink application for Linux back in 2003 but has now
-evolved to be something much more advanced.
+
+== Anti Kerchunking VAD (Voice Activity Detection) Feature ==
+
+In this fork of the SvxLink project, we introduce an innovative Voice Activity Detection (VAD) functionality, specifically designed to enhance the user experience and operational efficiency for repeater and simplex channel operations. This feature adeptly addresses the prevalent issue of "kerchunking"—the act of unintentionally keying up a transmitter without transmitting meaningful voice communication, which leads to unnecessary repeater use and potential interference.
+
+This addition represents a significant enhancement to the SvxLink project, leveraging sophisticated machine learning models to discern between intentional voice communications and unintentional or noise-induced transmissions. By doing so, it not only optimizes bandwidth usage but also ensures clearer and more reliable communication channels for the ham radio community.
+
+Note: This feature is a unique contribution to my fork of the SvxLink project, aimed at providing advanced, user-friendly voice services to the amateur radio community. For the latest updates, features, and contributions beyond the original SvxLink functionalities, please refer to this repository.
+=== Implementation ===
+
+The VAD feature is implemented using a sophisticated machine learning model, leveraging the ONNX runtime for efficient real-time audio processing. This model analyzes incoming audio streams to detect the presence of human speech with high accuracy, thereby enabling the system to differentiate between intentional voice communication and unintentional transmissions or background noise.
+
+Key components of the VAD implementation include:
+
+- Opus Audio Decoding: Converts Opus-encoded audio data into PCM format, preparing it for analysis by the VAD model.
+- PCM to Float Conversion: Transforms PCM audio data into floating-point format, normalizing the audio samples for consistent processing.
+- Machine Learning Model: A pre-trained ONNX model that evaluates audio data to determine the presence of voice activity.
+- Dynamic Thresholding: Utilizes a configurable threshold to determine voice activity, allowing for fine-tuning based on environmental conditions and user preferences.
+=== Benefits ===
+
+Integrating VAD into SvxLink provides several key benefits:
+
+- Reduced Bandwidth Usage: By filtering out non-voice transmissions, the system conserves bandwidth, allowing for more efficient use of the available spectrum.
+- Enhanced Audio Quality: Minimizes the transmission of background noise and other non-speech elements, resulting in clearer communication channels.
+- Improved User Experience: Reduces the occurrence of unintentional transmissions, ensuring that the repeater is available for meaningful communications.
+- Operational Efficiency: Automates the process of monitoring and managing voice transmissions, reducing the need for manual intervention by repeater operators.
+
+This feature represents a significant step forward in the SvxLink project's commitment to providing advanced, user-friendly voice services to the ham radio community. By leveraging cutting-edge machine learning technology, SvxLink continues to innovate in the field of amateur radio communications, setting new standards for performance and reliability.
+
+=== Installation ===
+1. Download the Silero VAD model file from the official repository: https://github.com/snakers4/silero-vad/blob/master/files/silero_vad.onnx
+2. Download the Microsoft ONNX Runtime library for your platform from the official repository releases: https://github.com/microsoft/onnxruntime/releases
+3. Extract the ONNX Runtime library directory
+4. Set the `ONNXRUNTIME_ROOT_DIR` environment variable to the path of the extracted ONNX Runtime library directory by running the following command:
+----
+export ONNXRUNTIME_ROOT_DIR=/path/to/onnxruntime
+----
+
+=== Configuration ===
+Edit the `svxreflector.conf` file to enable and configure the VAD feature. The following parameters can be adjusted to customize the VAD functionality:
+----
+[VAD_SETTINGS]
+# Enable or disable the VAD feature
+IS_VAD_ENABLED=true
+# Path to the Silero VAD model file
+SILERO_MODEL_PATH=/path/to/silero_vad.onnx
+# Sample rate of the audio stream in Hz for the VAD model
+SAMPLE_RATE=16000
+# Number of samples in the audio stream that the VAD model processes at once (should be the same as the model's input size)
+WINDOW_SIZE_SAMPLES=1536
+# Threshold for the VAD model to consider a frame as speech (0.0 - 1.0) - the higher the value, the more strict the VAD model is
+THRESHOLD=0.3
+# Number of samples sent to the VAD model at once (should be a multiple of WINDOW_SIZE_SAMPLES) - the higher the value, the more accurate the VAD model is
+PROCESSED_SAMPLE_BUFFER_SIZE=7680
+# The gate sample size is the number of samples that the VAD model uses to determine if the audio stream is speech or not (should be a multiple of PROCESSED_SAMPLE_BUFFER_SIZE)
+VAD_GATE_SAMPLE_SIZE=46080
+# List of callsigns for which the VAD is enabled (comma-separated)
+VAD_ENABLED_CALLSIGNS=client1,client2,client3
+----
+
+OSS software used in this project:
+
+- https://github.com/snakers4/silero-vad/[Silero VAD] - https://github.com/snakers4/silero-vad/blob/master/LICENSE[License]
+- https://github.com/microsoft/onnxruntime/[ONNX Runtime] - https://github.com/microsoft/onnxruntime/blob/main/LICENSE[License]
+- https://github.com/google/opuscpp/tree/master[Opus C++ Wrapper] - https://github.com/google/opuscpp/tree/master/LICENSE[License]
+
+=== Acknowledgements and Contributions ===
+This Anti Kerchunking VAD feature is a unique contribution by Silviu Stroe (YO6SAY) (https://brainic.io/?utm_source=svx[brainic.io]) as part of a fork of the original SvxLink project after extensive research and many hours of debugging and testing.
+
+The development and integration of this feature reflect https://github.com/sm0svx/svxlink/issues/661[my commitment] to enhancing the amateur radio community's experience and operational efficiency and *the main reason of getting me as a licensed radio amateur*.
+
+Thanks for the testers that helped me in testing the feature during the development process: YO3DEL (Dan N.), YO6NAM (Răzvan M.)
 
 == SvxLink Server ==
 The SvxLink Server is a general purpose voice services system, which when
