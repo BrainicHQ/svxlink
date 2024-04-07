@@ -224,9 +224,6 @@ class Reflector : public sigc::trackable
     int sampleRate;
     int64_t windowSizeSamples;
     float threshold;
-    int minSilenceDurationMs;
-    int speechPadMs;
-    int minSpeechDurationMs;
     bool isVadEnabled = false;
     size_t sampleBufferSize = 7680;
     size_t vadGateSampleSize = 16000;

@@ -249,17 +249,12 @@ bool Reflector::initialize(Async::Config &cfg)
     m_cfg->getValue("VAD_SETTINGS", "SAMPLE_RATE", sampleRate); // Get the sample rate
     m_cfg->getValue("VAD_SETTINGS", "WINDOW_SIZE_SAMPLES", windowSizeSamples); // Get the sample rate
     m_cfg->getValue("VAD_SETTINGS", "THRESHOLD", threshold); // Get the threshold value
-    m_cfg->getValue("VAD_SETTINGS", "MIN_SILENCE_DURATION_MS", minSilenceDurationMs); // Get the minimum silence duration in milliseconds
-    m_cfg->getValue("VAD_SETTINGS", "SPEECH_PAD_MS", speechPadMs); // Get the speech padding in milliseconds
-    m_cfg->getValue("VAD_SETTINGS", "MIN_SPEECH_DURATION_MS", minSpeechDurationMs); // Get the minimum speech duration in milliseconds
     m_cfg->getValue("VAD_SETTINGS", "PROCESSED_SAMPLE_BUFFER_SIZE", sampleBufferSize); // Get the sample buffer size (in samples
     m_cfg->getValue("VAD_SETTINGS", "VAD_GATE_SAMPLE_SIZE", vadGateSampleSize); // Get the sample buffer size (in samples)
 
     if(isVadEnabled) {
     vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,
-                                                windowSizeSamples, threshold,
-                                                minSilenceDurationMs, speechPadMs,
-                                                minSpeechDurationMs);
+                                                windowSizeSamples, threshold);
     }
 
   return true;
