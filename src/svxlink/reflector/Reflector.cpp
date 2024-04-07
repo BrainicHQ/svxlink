@@ -528,7 +528,7 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
             if (isVadEnabled && vadEnabledCallsigns.find(client->callsign()) != vadEnabledCallsigns.end()) {
 
                 if(processedSamples < vadGateSampleSize && !client->voiceDetected) {
-                    // Always append incoming audio data to the preVoiceBuffer
+                    // Always append incoming audio data to the preVoiceBuffer to not lose any data until voice is detected
                     preVoiceBuffer.push_back(msg);
 
                     // Decode the Opus data to PCM format immediately
@@ -548,8 +548,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                         std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + static_cast<std::vector<float>::difference_type>(sampleBufferSize));
                         vadIterator->process(batchToProcess);
                         processedSamples += sampleBufferSize;
-
-                        std::cout<< client->callsign() << " voice detected :" << client->voiceDetected << std::endl;
 
                         if (vadIterator->isVoicePresent())
                         {
@@ -575,7 +573,6 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                     break; // Skip further processing for this data chunk
 
                 } else if (client->voiceDetected) {
-                    // std::cout << "Voice detected, broadcasting\n";
                     // If voice has been detected, broadcast the audio data immediately
                     broadcastIfCurrentTalker(client, tg, msg);
                 }
@@ -586,22 +583,11 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
                 broadcastIfCurrentTalker(client, tg, msg);
             }
         }
-        // to check if the transmission stopped and voice is not detected then send the empty audio data
-
+          // If the processed samples exceed the VAD gate sample size and voice has not been detected, disconnect the client
           if (processedSamples >= vadGateSampleSize && !client->voiceDetected) {
-              // std::cout << "Voice not detected, end\n" << processedSamples << std::endl;
-              // If voice has not been detected, send an empty audio data message
-              // clear the pre-voice buffer and broadcast the empty audio data message
-              //MsgUdpAudio emptyMsg;
-              //broadcastIfCurrentTalker(client, tg, emptyMsg);
-              //msg.audioData().clear();
               client->disconnect();
               resetVadStates();
               return;
-
-              // also try to reset the talker
-              // TGHandler::instance()->setTalkerForTG(tg, 0); // Reset the talker for the TG
-              // client->sendUdpMsg(MsgUdpAllSamplesFlushed()); // Send the flush message to the client
           }
 
       }
@@ -732,8 +718,6 @@ void Reflector::onTalkerUpdated(uint32_t tg, ReflectorClient* old_talker,
   }
   if (new_talker != 0)
   {
-      //resetVadStates();
-      // new_talker->voiceDetected = false;
     cout << new_talker->callsign() << ": Talker start on TG #" << tg << endl;
     broadcastMsg(MsgTalkerStart(tg, new_talker->callsign()),
         ReflectorClient::mkAndFilter(
