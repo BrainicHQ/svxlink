@@ -234,28 +234,29 @@ bool Reflector::initialize(Async::Config &cfg)
     m_http_server->clientDisconnected.connect(
         sigc::mem_fun(*this, &Reflector::httpClientDisconnected));
   }
-
-<<<<<<< HEAD
+    
     // Path for command PTY
-  string pty_path;
-  m_cfg->getValue("GLOBAL", "COMMAND_PTY", pty_path);
-  if (!pty_path.empty())
-  {
-    m_cmd_pty = new Pty(pty_path);
-    if ((m_cmd_pty == nullptr) || !m_cmd_pty->open())
+    string pty_path;
+    m_cfg->getValue("GLOBAL", "COMMAND_PTY", pty_path);
+    if (!pty_path.empty())
     {
-      std::cerr << "*** ERROR: Could not open command PTY '" << pty_path
-                << "' as specified in configuration variable "
-                   "GLOBAL/COMMAND_PTY" << std::endl;
-      return false;
+        m_cmd_pty = new Pty(pty_path);
+        if ((m_cmd_pty == nullptr) || !m_cmd_pty->open())
+        {
+            std::cerr << "*** ERROR: Could not open command PTY '" << pty_path
+            << "' as specified in configuration variable "
+            "GLOBAL/COMMAND_PTY" << std::endl;
+            return false;
+        }
+        m_cmd_pty->setLineBuffered(true);
+        m_cmd_pty->dataReceived.connect(
+                                        mem_fun(*this, &Reflector::ctrlPtyDataReceived));
     }
-    m_cmd_pty->setLineBuffered(true);
-    m_cmd_pty->dataReceived.connect(
-        mem_fun(*this, &Reflector::ctrlPtyDataReceived));
-  }
+    
+    m_cfg->valueUpdated.connect(sigc::mem_fun(*this, &Reflector::cfgUpdated));
+    
+    
 
-  m_cfg->valueUpdated.connect(sigc::mem_fun(*this, &Reflector::cfgUpdated));
-=======
     m_cfg->getValue("VAD_SETTINGS", "VAD_ENABLED_CALLSIGNS", vadEnabledCallsigns); // Get the list of
     // callsigns in format "callsign1,callsign2,callsign3"
     m_cfg->getValue("VAD_SETTINGS", "SILERO_MODEL_PATH", modelPath); // Get the path to the ONNX model
@@ -282,7 +283,6 @@ bool Reflector::initialize(Async::Config &cfg)
     vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,
                                                 windowSizeSamples, threshold);
     }
->>>>>>> origin/silero-clean
 
   return true;
 } /* Reflector::initialize */
