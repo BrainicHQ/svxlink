@@ -4,6 +4,8 @@
 @author  Tobias Blomberg / SM0SVX
 @date	 2017-02-11
 
+Additional VAD functionality added by Silviu Stroe (www.brainic.io) in 2024.
+
 \verbatim
 SvxReflector - An audio reflector for connecting SvxLink Servers
 Copyright (C) 2003-2023 Tobias Blomberg / SM0SVX

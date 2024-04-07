@@ -1,3 +1,33 @@
+/*
+ * VadIterator.cpp
+ *
+ * This file is part of the SvxLink project, which is licensed under the GNU General Public License v2.
+ * Portions of this file are inspired by or derived from code found in https://github.com/snakers4/silero-vad/,
+ * a project licensed under the MIT License. The specific source file did not contain a separate license header,
+ * but the project as a whole is licensed under the MIT License, as detailed in the project's repository.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (included in the project's repository)
+ * shall be included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Additional modifications and contributions to this file are licensed under the GNU General Public License v2,
+ * and are copyrighted (C) 2024 Silviu Stroe - www.brainic.io
+ */
+
 #include "VadIterator.h"
 #include <cstring>
 #include <codecvt>
@@ -108,6 +138,8 @@ void VadIterator::process(const std::vector<float> &input_wav) {
             break;
         std::vector<float> r{&input_wav[0] + j, &input_wav[0] + j + window_size_samples};
         predict(r);
+        if (voiceDetected)
+            break;
     }
 
 }
