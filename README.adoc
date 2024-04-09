@@ -63,6 +63,8 @@ PROCESSED_SAMPLE_BUFFER_SIZE=7680
 VAD_GATE_SAMPLE_SIZE=46080
 # List of callsigns for which the VAD is enabled (comma-separated)
 VAD_ENABLED_CALLSIGNS=client1,client2,client3
+# The ms cutoff time from the start of the transmission to the start of the voice activity detection (be aware to don't set the value too higher than PROCESSED_SAMPLE_BUFFER_SIZE calculated in ms)
+START_SILENCE_MS=500
 ----
 
 OSS software used in this project:

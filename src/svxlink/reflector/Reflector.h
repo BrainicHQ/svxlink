@@ -233,6 +233,7 @@ class Reflector : public sigc::trackable
     size_t vadGateSampleSize = 16000;
     std::vector<MsgUdpAudio> preVoiceBuffer;
     size_t processedSamples = 0;
+    int startSilenceMs = 0;
 
     void broadcastIfCurrentTalker(ReflectorClient *client, uint32_t tg, const MsgUdpAudio &msg);
 

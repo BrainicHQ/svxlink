@@ -278,6 +278,7 @@ bool Reflector::initialize(Async::Config &cfg)
     m_cfg->getValue("VAD_SETTINGS", "THRESHOLD", threshold); // Get the threshold value
     m_cfg->getValue("VAD_SETTINGS", "PROCESSED_SAMPLE_BUFFER_SIZE", sampleBufferSize); // Get the sample buffer size (in samples
     m_cfg->getValue("VAD_SETTINGS", "VAD_GATE_SAMPLE_SIZE", vadGateSampleSize); // Get the sample buffer size (in samples)
+    m_cfg->getValue("VAD_SETTINGS", "START_SILENCE_MS", startSilenceMs); // Get the start silence duration (in ms)
 
     if(isVadEnabled) {
     vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,
@@ -564,10 +565,12 @@ void Reflector::udpDatagramReceived(const IpAddress& addr, uint16_t port,
 
                     // Accumulate floating-point PCM samples for processing
                     pcmSampleBuffer.insert(pcmSampleBuffer.end(), pcmDataFloat.begin(), pcmDataFloat.end());
+                    int silenceSamples = (16000 * startSilenceMs) / 1000;
 
                     while (pcmSampleBuffer.size() >= sampleBufferSize && processedSamples < vadGateSampleSize && !client->voiceDetected)
                     {
                         std::vector<float> batchToProcess(pcmSampleBuffer.begin(), pcmSampleBuffer.begin() + static_cast<std::vector<float>::difference_type>(sampleBufferSize));
+                        std::fill_n(batchToProcess.begin(), std::min(static_cast<size_t>(silenceSamples), batchToProcess.size()), 0.0f); // Replace the first ms of the buffer with silence
                         vadIterator->process(batchToProcess);
                         processedSamples += sampleBufferSize;
 
