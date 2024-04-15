@@ -278,7 +278,7 @@ bool Reflector::initialize(Async::Config &cfg)
     m_cfg->getValue("VAD_SETTINGS", "THRESHOLD", threshold); // Get the threshold value
     m_cfg->getValue("VAD_SETTINGS", "PROCESSED_SAMPLE_BUFFER_SIZE", sampleBufferSize); // Get the sample buffer size (in samples
     m_cfg->getValue("VAD_SETTINGS", "VAD_GATE_SAMPLE_SIZE", vadGateSampleSize); // Get the sample buffer size (in samples)
-    m_cfg->getValue("VAD_SETTINGS", "START_SILENCE_MS", startSilenceMs); // Get the start silence duration (in ms)
+    m_cfg->getValue("VAD_SETTINGS", "START_SILENCE_REPLACEMENT_BUFFER_MS", startSilenceMs); // Replace the first ms of the buffer with silence
 
     if(isVadEnabled) {
     vadIterator = std::make_unique<VadIterator>(wideModelPath, sampleRate,

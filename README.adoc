@@ -1,11 +1,4 @@
-SvxLink
-=======
-
-image:https://travis-ci.org/sm0svx/svxlink.svg?branch=master["Build Status", link="https://travis-ci.org/sm0svx/svxlink"]
-image:https://badges.gitter.im/Join%20Chat.svg[link="https://gitter.im/sm0svx/svxlink?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"]
-
-
-== Anti Kerchunking VAD (Voice Activity Detection) Feature ==
+= SvxLink Reflector with Anti Kerchunking VAD (Voice Activity Detection) Feature =
 
 This fork of the SvxLink project introduces an innovative Voice Activity Detection (VAD) functionality, specifically designed to enhance the user experience and operational efficiency for repeater and simplex channel operations. This feature adeptly addresses the prevalent issue of "kerchunking"—the act of unintentionally keying up a transmitter without transmitting meaningful voice communication, which leads to unnecessary repeater use and potential interference.
 
@@ -50,8 +43,8 @@ Edit the `svxreflector.conf` file to enable and configure the VAD feature. The f
 # Enable or disable the VAD feature
 IS_VAD_ENABLED=true
 # Path to the Silero VAD model file
-SILERO_MODEL_PATH=/path/to/silero_vad.onnx
-# Sample rate of the audio stream in Hz for the VAD model
+SILERO_MODEL_PATH=/home/silviu/silero-vad/files/silero_vad.onnx
+# Sample rate of the audio stream in Hz for the VAD model (Do not change this value unless you know what you are doing)
 SAMPLE_RATE=16000
 # Number of samples in the audio stream that the VAD model processes at once (should be the same as the model's input size)
 WINDOW_SIZE_SAMPLES=1536
@@ -63,15 +56,19 @@ PROCESSED_SAMPLE_BUFFER_SIZE=7680
 VAD_GATE_SAMPLE_SIZE=46080
 # List of callsigns for which the VAD is enabled (comma-separated)
 VAD_ENABLED_CALLSIGNS=client1,client2,client3
-# The ms cutoff time from the start of the transmission to the start of the voice activity detection (be aware to don't set the value too higher than PROCESSED_SAMPLE_BUFFER_SIZE calculated in ms)
-START_SILENCE_MS=500
+# Number of first milliseconds in buffer that are replaced with silence before sending the audio stream to the VAD model to minimize the false positives
+START_SILENCE_REPLACEMENT_BUFFER_MS=90
 ----
 
-OSS software used in this project:
+=== OSS software used in this project:
 
 - https://github.com/snakers4/silero-vad/[Silero VAD] - https://github.com/snakers4/silero-vad/blob/master/LICENSE[License]
 - https://github.com/microsoft/onnxruntime/[ONNX Runtime] - https://github.com/microsoft/onnxruntime/blob/main/LICENSE[License]
 - https://github.com/google/opuscpp/tree/master[Opus C++ Wrapper] - https://github.com/google/opuscpp/tree/master/LICENSE[License]
+
+=== Known issues:
+As the application is single-threaded, the VAD model processing might block the audio stream processing, causing audio artifacts.
+Currently this can be improved by keeping the VAD model processing time as low as possible by using the smallest possible `PROCESSED_SAMPLE_BUFFER_SIZE` value and by using a powerful CPU.
 
 === Acknowledgements and Contributions ===
 This Anti Kerchunking VAD feature is a unique contribution by Silviu Stroe (YO6SAY) (https://brainic.io/?utm_source=svx[brainic.io]) as part of a fork of the original SvxLink project after extensive research and many hours of debugging and testing.
@@ -81,6 +78,12 @@ The development and integration of this feature reflect https://github.com/sm0sv
 Thanks for the testers that helped me in testing the feature during the development process: YO3DEL (Dan N.), YO6NAM (Răzvan M.)
 
 ---
+
+SvxLink
+=======
+
+image:https://travis-ci.org/sm0svx/svxlink.svg?branch=master["Build Status", link="https://travis-ci.org/sm0svx/svxlink"]
+image:https://badges.gitter.im/Join%20Chat.svg[link="https://gitter.im/sm0svx/svxlink?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge"]
 
 == SvxLink Server ==
 The SvxLink Server is a general purpose voice services system, which when
